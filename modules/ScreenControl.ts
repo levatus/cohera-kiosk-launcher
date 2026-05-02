@@ -1,0 +1,28 @@
+/**
+ * Thin wrapper around the native ScreenControlModule.
+ *
+ * wakeScreen() — turns the display on (wake lock / setTurnScreenOn)
+ * lockScreen() — turns the display off (DevicePolicyManager.lockNow)
+ *               Resolves on success; rejects with code "NOT_DEVICE_ADMIN"
+ *               if the app does not have Device Owner / Admin rights.
+ *
+ * Both are no-ops on platforms other than Android.
+ */
+
+import { NativeModules, Platform } from "react-native";
+
+const { ScreenControlModule } = NativeModules;
+
+export async function wakeScreen(): Promise<void> {
+  if (Platform.OS !== "android" || !ScreenControlModule) return;
+  return ScreenControlModule.wakeScreen();
+}
+
+/**
+ * Attempts to lock the screen via DevicePolicyManager.
+ * Throws with code "NOT_DEVICE_ADMIN" if not device admin.
+ */
+export async function lockScreen(): Promise<void> {
+  if (Platform.OS !== "android" || !ScreenControlModule) return;
+  return ScreenControlModule.lockScreen();
+}
