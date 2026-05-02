@@ -33,7 +33,6 @@
         }
       ],
       "expo-font",
-      "expo-web-browser",
       "./plugins/withKioskAndroid",
       "./plugins/withLockTask",
       "./plugins/withScreenControl"
