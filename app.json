@@ -7,7 +7,7 @@
     "icon": "./assets/images/icon.png",
     "scheme": "kiosk-launcher",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "splash": {
       "image": "./assets/images/icon.png",
       "resizeMode": "contain",
@@ -39,8 +39,7 @@
       "./plugins/withScreenControl"
     ],
     "experiments": {
-      "typedRoutes": true,
-      "reactCompiler": true
+      "typedRoutes": true
     }
   }
 }
