@@ -20,7 +20,7 @@
 ### 1. Download the project code
 Clone the standalone repository to your machine:
 ```bash
-git clone https://github.com/cohera-health/cohera-kiosk-launcher.git
+git clone https://github.com/levatus/cohera-kiosk-launcher.git
 cd cohera-kiosk-launcher
 ```
 
