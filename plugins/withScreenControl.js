@@ -38,7 +38,7 @@ class ScreenControlModule(reactContext: ReactApplicationContext) :
 
     @ReactMethod
     fun wakeScreen(promise: Promise) {
-        val activity = currentActivity
+        val activity = reactApplicationContext.currentActivity
         if (activity == null) {
             promise.reject("NO_ACTIVITY", "No current Activity")
             return
