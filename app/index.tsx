@@ -19,7 +19,7 @@ import { useScreenSchedule } from "@/hooks/useScreenSchedule";
 import { startLock, stopLock } from "@/modules/LockTask";
 
 const EMR_URL =
-  process.env.EXPO_PUBLIC_EMR_URL ?? "https://emrreplit.replit.app";
+  process.env.EXPO_PUBLIC_EMR_URL ?? "https://health-record-hub-slinuw.replit.app";
 
 /**
  * PIN that staff must enter to access admin options.
