@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as Updates from "expo-updates";
 import * as FileSystem from "expo-file-system/legacy";
-import * as IntentLauncher from "expo-intent-launcher";
 import Constants from "expo-constants";
 import { Platform } from "react-native";
+import { installApk } from "@/modules/LockTask";
 
 const GITHUB_REPO = "levatus/cohera-kiosk-launcher";
 const RELEASES_URL = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
@@ -73,7 +73,8 @@ export function useAppUpdate(): UseAppUpdateResult {
 
   /**
    * Check GitHub Releases for a newer versionCode.
-   * If found, download and launch the Android package installer immediately.
+   * If found, download and silently install via Device Owner PackageInstaller.
+   * No dialog shown — the system kills and restarts the app when done.
    */
   const forceUpdateIfAvailable = useCallback(async () => {
     if (Platform.OS !== "android") {
@@ -106,9 +107,12 @@ export function useAppUpdate(): UseAppUpdateResult {
         return;
       }
 
-      // Newer build found — start forced download
+      // Newer build found — download then silently install
       const asset = release.assets?.find((a) => a.name.endsWith(".apk"));
-      if (!asset) return;
+      if (!asset) {
+        setState((s) => ({ ...s, isChecking: false }));
+        return;
+      }
 
       setState((s) => ({
         ...s,
@@ -134,18 +138,13 @@ export function useAppUpdate(): UseAppUpdateResult {
 
       await download.downloadAsync();
 
-      const contentUri = await FileSystem.getContentUriAsync(localUri);
+      // Mark as 100% and hand off to silent Device Owner installer.
+      // Android will kill and relaunch the app — no dialog shown.
+      setState((s) => ({ ...s, updateProgress: 1 }));
+      await installApk(localUri);
 
-      // Hand off to Android package installer
-      await IntentLauncher.startActivityAsync(
-        "android.intent.action.INSTALL_PACKAGE",
-        {
-          data: contentUri,
-          flags: 1,
-          type: "application/vnd.android.package-archive",
-        }
-      );
-
+      // If installApk returns (shouldn't happen normally — system restarts app),
+      // clear the updating state so the UI recovers gracefully.
       setState((s) => ({ ...s, isUpdating: false }));
     } catch (e) {
       setState((s) => ({
@@ -162,7 +161,7 @@ export function useAppUpdate(): UseAppUpdateResult {
     const delay = msUntilHour(EVENING_HOUR);
     eveningTimer.current = setTimeout(() => {
       void forceUpdateIfAvailable();
-      scheduleEveningCheck(); // reschedule for same time tomorrow
+      scheduleEveningCheck();
     }, delay);
   }, [forceUpdateIfAvailable]);
 

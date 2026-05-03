@@ -88,6 +88,56 @@ class LockTaskModule(reactContext: ReactApplicationContext) :
             promise.reject("STOP_LOCK_TASK_FAILED", e.message, e)
         }
     }
+
+    /**
+     * Silently install an APK using Android PackageInstaller.
+     * Works without any user dialog because this app is the Device Owner.
+     * The system will kill and restart the app once installation completes.
+     *
+     * @param apkUri  file:// URI returned by expo-file-system (e.g. cacheDirectory + "kiosk-update.apk")
+     */
+    @ReactMethod
+    fun installApk(apkUri: String, promise: Promise) {
+        try {
+            val path = apkUri.removePrefix("file://")
+            val apkFile = java.io.File(path)
+            if (!apkFile.exists()) {
+                promise.reject("FILE_NOT_FOUND", "APK not found at: $path")
+                return
+            }
+
+            val packageInstaller = reactApplicationContext.packageManager.packageInstaller
+            val params = android.content.pm.PackageInstaller.SessionParams(
+                android.content.pm.PackageInstaller.SessionParams.MODE_FULL_INSTALL
+            )
+
+            val sessionId = packageInstaller.createSession(params)
+            val session = packageInstaller.openSession(sessionId)
+
+            apkFile.inputStream().use { input ->
+                session.openWrite("base.apk", 0, apkFile.length()).use { output ->
+                    input.copyTo(output)
+                    session.fsync(output)
+                }
+            }
+
+            val intent = android.content.Intent("${reactApplicationContext.packageName}.INSTALL_COMPLETE").apply {
+                setPackage(reactApplicationContext.packageName)
+            }
+            val pendingIntent = android.app.PendingIntent.getBroadcast(
+                reactApplicationContext,
+                sessionId,
+                intent,
+                android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+            )
+
+            session.commit(pendingIntent.intentSender)
+            session.close()
+            promise.resolve(null)
+        } catch (e: Exception) {
+            promise.reject("INSTALL_FAILED", e.message, e)
+        }
+    }
 }
 `;
 

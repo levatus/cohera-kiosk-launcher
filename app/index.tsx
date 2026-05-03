@@ -250,7 +250,9 @@ export default function KioskScreen() {
       {isUpdating && (
         <View style={styles.updateOverlay} pointerEvents="box-only">
           <Text style={styles.updateIcon}>📦</Text>
-          <Text style={styles.updateTitle}>Installing Update</Text>
+          <Text style={styles.updateTitle}>
+            {updateProgress >= 1 ? "Installing…" : "Downloading Update"}
+          </Text>
           <Text style={styles.updateBuild}>
             {latestBuild > 0 ? `Build ${latestBuild}` : "Downloading…"}
           </Text>
