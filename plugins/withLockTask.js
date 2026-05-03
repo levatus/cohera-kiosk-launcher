@@ -121,7 +121,7 @@ class LockTaskModule(reactContext: ReactApplicationContext) :
                 }
             }
 
-            val intent = android.content.Intent("${reactApplicationContext.packageName}.INSTALL_COMPLETE").apply {
+            val intent = android.content.Intent("\${reactApplicationContext.packageName}.INSTALL_COMPLETE").apply {
                 setPackage(reactApplicationContext.packageName)
             }
             val pendingIntent = android.app.PendingIntent.getBroadcast(
