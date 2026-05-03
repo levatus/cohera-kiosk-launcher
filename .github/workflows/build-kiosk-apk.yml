@@ -1,0 +1,36 @@
+name: Build Kiosk APK
+on:
+  workflow_dispatch:
+jobs:
+  build:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+      - name: Build APK
+        run: eas build --platform android --profile production --non-interactive
+      - name: Print build link
+        run: |
+          BUILD_JSON=$(eas build:list --platform android --limit 1 --json --non-interactive 2>/dev/null || echo "[]")
+          BUILD_ID=$(echo "$BUILD_JSON" | node -e "try{const a=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));if(a[0]?.id)console.log(a[0].id);}catch(e){}")
+          if [ -n "$BUILD_ID" ]; then
+            echo "Download APK: https://expo.dev/accounts/slinuw/projects/cohera-kiosk-launcher/builds/$BUILD_ID"
+          else
+            echo "Check builds at: https://expo.dev/accounts/slinuw/projects/cohera-kiosk-launcher/builds"
+          fi
