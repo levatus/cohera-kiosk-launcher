@@ -12,7 +12,6 @@ import {
 } from "react-native";
 import { WebView, WebViewNavigation } from "react-native-webview";
 import { AdminMenu } from "@/components/AdminMenu";
-import { LongPressEscapeButton } from "@/components/LongPressEscapeButton";
 import { PinModal } from "@/components/PinModal";
 import { ScheduleModal } from "@/components/ScheduleModal";
 import { useScreenSchedule } from "@/hooks/useScreenSchedule";
@@ -25,9 +24,11 @@ const EMR_URL =
 /**
  * PIN that staff must enter to access admin options.
  * Set EXPO_PUBLIC_KIOSK_EXIT_PIN at build time.
- * Default is "1234" — change before deploying.
+ * Default is "1561".
  */
-const EXIT_PIN = process.env.EXPO_PUBLIC_KIOSK_EXIT_PIN ?? "1234";
+const EXIT_PIN = process.env.EXPO_PUBLIC_KIOSK_EXIT_PIN ?? "1561";
+
+const AUTO_LOCK_DELAY_MS = 2 * 60 * 1000;
 
 export default function KioskScreen() {
   useKeepAwake();
@@ -36,9 +37,11 @@ export default function KioskScreen() {
     useAppUpdate();
 
   const webViewRef = useRef<WebView>(null);
+  const autoLockTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [canGoBack, setCanGoBack] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isKioskLocked, setIsKioskLocked] = useState(true);
 
   // Modal visibility
   const [pinVisible, setPinVisible] = useState(false);
@@ -74,6 +77,15 @@ export default function KioskScreen() {
     return () => sub.remove();
   }, [canGoBack]);
 
+  // Clean up auto-lock timer on unmount
+  useEffect(() => {
+    return () => {
+      if (autoLockTimer.current) {
+        clearTimeout(autoLockTimer.current);
+      }
+    };
+  }, []);
+
   const onNavigationStateChange = useCallback(
     (navState: WebViewNavigation) => {
       setCanGoBack(navState.canGoBack);
@@ -97,10 +109,24 @@ export default function KioskScreen() {
     webViewRef.current?.reload();
   }, []);
 
-  // 5-second hold → PIN prompt
-  const handleEscapeHold = useCallback(() => {
-    setPinVisible(true);
+  // Re-engage lock-task mode and update state
+  const lockKiosk = useCallback(async () => {
+    if (autoLockTimer.current) {
+      clearTimeout(autoLockTimer.current);
+      autoLockTimer.current = null;
+    }
+    await startLock();
+    setIsKioskLocked(true);
   }, []);
+
+  // Button tap: lock icon when locked (open PIN), unlock icon when unlocked (re-lock)
+  const handleLockButtonPress = useCallback(() => {
+    if (isKioskLocked) {
+      setPinVisible(true);
+    } else {
+      lockKiosk();
+    }
+  }, [isKioskLocked, lockKiosk]);
 
   // Correct PIN → admin menu
   const handlePinSuccess = useCallback(() => {
@@ -111,10 +137,24 @@ export default function KioskScreen() {
   const handlePinDismiss = useCallback(() => setPinVisible(false), []);
 
   // Admin menu actions
-  const handleExitKiosk = useCallback(async () => {
+  const handleUnlockKiosk = useCallback(async () => {
     setAdminVisible(false);
     await stopLock();
-  }, []);
+    setIsKioskLocked(false);
+    // Auto-lock after 2 minutes of unlocked use
+    autoLockTimer.current = setTimeout(() => {
+      lockKiosk();
+    }, AUTO_LOCK_DELAY_MS);
+  }, [lockKiosk]);
+
+  const handleSignOut = useCallback(() => {
+    setAdminVisible(false);
+    const logoutUrl = `${EMR_URL}/auth/signout`;
+    if (webViewRef.current) {
+      webViewRef.current.injectJavaScript(`window.location.href = ${JSON.stringify(logoutUrl)}; true;`);
+    }
+    lockKiosk();
+  }, [lockKiosk]);
 
   const handleOpenSchedule = useCallback(() => {
     setAdminVisible(false);
@@ -243,7 +283,14 @@ export default function KioskScreen() {
         </View>
       )}
 
-      <LongPressEscapeButton onEscape={handleEscapeHold} />
+      {/* Lock/unlock button in the top-right corner */}
+      <Pressable
+        style={[styles.lockButton, !isKioskLocked && styles.lockButtonUnlocked]}
+        onPress={handleLockButtonPress}
+        testID="lock-button"
+      >
+        <Text style={styles.lockButtonIcon}>{isKioskLocked ? "🔒" : "🔓"}</Text>
+      </Pressable>
 
       <PinModal
         visible={pinVisible}
@@ -254,7 +301,8 @@ export default function KioskScreen() {
 
       <AdminMenu
         visible={adminVisible}
-        onExitKiosk={handleExitKiosk}
+        onUnlockKiosk={handleUnlockKiosk}
+        onSignOut={handleSignOut}
         onSchedule={handleOpenSchedule}
         onDismiss={handleAdminDismiss}
         onCheckForUpdates={checkNow}
@@ -395,6 +443,24 @@ const styles = StyleSheet.create({
     fontSize: 13,
     textAlign: "center",
     marginTop: 8,
+  },
+  lockButton: {
+    position: "absolute",
+    top: 16,
+    right: 16,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: "rgba(255,255,255,0.12)",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 30,
+  },
+  lockButtonUnlocked: {
+    backgroundColor: "rgba(74,222,128,0.20)",
+  },
+  lockButtonIcon: {
+    fontSize: 18,
   },
   webPlaceholder: {
     flex: 1,

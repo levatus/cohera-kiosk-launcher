@@ -2,8 +2,8 @@
  * AdminMenu
  *
  * Shown after a successful PIN entry.
- * Lets staff choose between exiting kiosk mode, opening schedule settings,
- * or manually triggering an app update check.
+ * Lets staff choose between admin settings, unlocking the kiosk,
+ * signing out, or triggering an app update check.
  */
 
 import React from "react";
@@ -11,7 +11,8 @@ import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 
 interface Props {
   visible: boolean;
-  onExitKiosk: () => void;
+  onUnlockKiosk: () => void;
+  onSignOut: () => void;
   onSchedule: () => void;
   onDismiss: () => void;
   onCheckForUpdates: () => void;
@@ -19,7 +20,8 @@ interface Props {
 
 export function AdminMenu({
   visible,
-  onExitKiosk,
+  onUnlockKiosk,
+  onSignOut,
   onSchedule,
   onDismiss,
   onCheckForUpdates,
@@ -37,10 +39,10 @@ export function AdminMenu({
           <Text style={s.title}>Admin Options</Text>
 
           <Pressable style={s.item} onPress={onSchedule}>
-            <Text style={s.icon}>🕐</Text>
+            <Text style={s.icon}>⚙️</Text>
             <View style={s.itemText}>
-              <Text style={s.itemTitle}>Screen Schedule</Text>
-              <Text style={s.itemSub}>Set daily on/off times for the display</Text>
+              <Text style={s.itemTitle}>Admin Settings</Text>
+              <Text style={s.itemSub}>Screen schedule and app update options</Text>
             </View>
           </Pressable>
 
@@ -58,11 +60,19 @@ export function AdminMenu({
             </View>
           </Pressable>
 
-          <Pressable style={[s.item, s.exitItem]} onPress={onExitKiosk}>
+          <Pressable style={[s.item, s.unlockItem]} onPress={onUnlockKiosk}>
             <Text style={s.icon}>🔓</Text>
             <View style={s.itemText}>
-              <Text style={[s.itemTitle, s.exitTitle]}>Exit Kiosk Mode</Text>
-              <Text style={s.itemSub}>Unlock the device and return to Android</Text>
+              <Text style={[s.itemTitle, s.unlockTitle]}>Unlock Kiosk</Text>
+              <Text style={s.itemSub}>Exit lock-task mode — tablet can be used freely</Text>
+            </View>
+          </Pressable>
+
+          <Pressable style={[s.item, s.signOutItem]} onPress={onSignOut}>
+            <Text style={s.icon}>↩️</Text>
+            <View style={s.itemText}>
+              <Text style={[s.itemTitle, s.signOutTitle]}>Sign Out</Text>
+              <Text style={s.itemSub}>Return to login screen — device stays pinned</Text>
             </View>
           </Pressable>
 
@@ -105,8 +115,11 @@ const s = StyleSheet.create({
     marginBottom: 10,
     gap: 14,
   },
-  exitItem: {
+  unlockItem: {
     backgroundColor: "rgba(255,60,60,0.12)",
+  },
+  signOutItem: {
+    backgroundColor: "rgba(255,165,0,0.10)",
   },
   icon: {
     fontSize: 24,
@@ -120,8 +133,11 @@ const s = StyleSheet.create({
     fontWeight: "600" as const,
     marginBottom: 2,
   },
-  exitTitle: {
+  unlockTitle: {
     color: "#ff7070",
+  },
+  signOutTitle: {
+    color: "#ffb347",
   },
   itemSub: {
     color: "rgba(255,255,255,0.45)",
