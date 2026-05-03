@@ -16,6 +16,7 @@ import { PinModal } from "@/components/PinModal";
 import { ScheduleModal } from "@/components/ScheduleModal";
 import { useScreenSchedule } from "@/hooks/useScreenSchedule";
 import { useAppUpdate } from "@/hooks/useAppUpdate";
+import { useBuildInfo } from "@/hooks/useBuildInfo";
 import { startLock, stopLock } from "@/modules/LockTask";
 
 const EMR_URL =
@@ -35,6 +36,7 @@ export default function KioskScreen() {
 
   const { isChecking, isUpdating, updateProgress, updateError, latestBuild, checkNow } =
     useAppUpdate();
+  const buildInfo = useBuildInfo();
 
   const webViewRef = useRef<WebView>(null);
   const autoLockTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -201,6 +203,11 @@ export default function KioskScreen() {
           <Text style={styles.checkingIcon}>🏥</Text>
           <Text style={styles.checkingTitle}>Cohera Kiosk</Text>
           <Text style={styles.checkingSub}>Checking for updates…</Text>
+          {buildInfo != null && (
+            <Text style={styles.checkingVersion}>
+              Build {buildInfo.build} · Updated {buildInfo.installedAt}
+            </Text>
+          )}
         </View>
       ) : (
         <WebView
@@ -381,6 +388,13 @@ const styles = StyleSheet.create({
     color: "rgba(255,255,255,0.4)",
     fontSize: 15,
     textAlign: "center",
+  },
+  checkingVersion: {
+    color: "rgba(255,255,255,0.2)",
+    fontSize: 12,
+    textAlign: "center",
+    marginTop: 24,
+    fontVariant: ["tabular-nums"],
   },
   updateOverlay: {
     ...StyleSheet.absoluteFillObject,
