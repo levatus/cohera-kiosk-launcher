@@ -177,6 +177,7 @@ export default function KioskScreen() {
     (function() {
       document.addEventListener('contextmenu', function(e) { e.preventDefault(); }, true);
       window.__KIOSK_MODE__ = true;
+      window.__KIOSK_BUILD__ = ${JSON.stringify(buildInfo ?? {})};
     })();
     true;
   `;
