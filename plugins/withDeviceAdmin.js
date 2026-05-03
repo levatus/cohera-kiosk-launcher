@@ -9,7 +9,7 @@
  *     to the policies XML.
  *
  * After installing the APK built from this code, run once on the tablet:
- *   adb shell dpm set-device-owner com.clinic.kioskbrowser/.AdminReceiver
+ *   adb shell dpm set-device-owner com.clinic.kioskbrowser/.KioskDeviceAdminReceiver
  * (The tablet must have no Google accounts added before running this.)
  */
 
