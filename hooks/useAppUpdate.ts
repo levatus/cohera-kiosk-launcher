@@ -8,16 +8,18 @@ import { Platform } from "react-native";
 const GITHUB_REPO = "levatus/cohera-kiosk-launcher";
 const RELEASES_URL = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
 
+/** Local time hour (24-h) at which the daily forced update check runs. */
+const EVENING_HOUR = 21; // 9 PM
+
 export interface AppUpdateState {
-  apkUpdateAvailable: boolean;
-  apkLatestBuild: number;
-  apkDownloading: boolean;
-  apkDownloadProgress: number;
-  apkError: string | null;
+  isUpdating: boolean;
+  updateProgress: number;
+  updateError: string | null;
+  latestBuild: number;
 }
 
 export interface UseAppUpdateResult extends AppUpdateState {
-  installAPK: () => Promise<void>;
+  /** Manually trigger a forced update check (for AdminMenu). */
   checkNow: () => void;
 }
 
@@ -45,46 +47,61 @@ async function applyEASUpdate(): Promise<void> {
   }
 }
 
+/** Returns ms until the next occurrence of `hour:00` local time. */
+function msUntilHour(hour: number): number {
+  const now = new Date();
+  const target = new Date(now);
+  target.setHours(hour, 0, 0, 0);
+  if (target <= now) {
+    target.setDate(target.getDate() + 1);
+  }
+  return target.getTime() - now.getTime();
+}
+
 export function useAppUpdate(): UseAppUpdateResult {
-  const checked = useRef(false);
+  const launchChecked = useRef(false);
+  const eveningTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const [state, setState] = useState<AppUpdateState>({
-    apkUpdateAvailable: false,
-    apkLatestBuild: 0,
-    apkDownloading: false,
-    apkDownloadProgress: 0,
-    apkError: null,
+    isUpdating: false,
+    updateProgress: 0,
+    updateError: null,
+    latestBuild: 0,
   });
 
-  const checkAPKUpdate = useCallback(async () => {
+  /**
+   * Check GitHub Releases for a newer versionCode.
+   * If found, download and launch the Android package installer immediately.
+   */
+  const forceUpdateIfAvailable = useCallback(async () => {
     if (Platform.OS !== "android") return;
+
     try {
       const res = await fetch(RELEASES_URL, {
         headers: { Accept: "application/vnd.github+json" },
       });
       if (!res.ok) return;
+
       const release = (await res.json()) as GithubRelease;
       const match = release.tag_name?.match(/^build-(\d+)$/);
       if (!match) return;
+
       const latestBuild = parseInt(match[1], 10);
       const currentBuild = Constants.expoConfig?.android?.versionCode ?? 1;
-      if (latestBuild > currentBuild) {
-        setState((s) => ({ ...s, apkUpdateAvailable: true, apkLatestBuild: latestBuild }));
-      }
-    } catch {
-      // Silent — no connectivity or no releases yet
-    }
-  }, []);
 
-  const installAPK = useCallback(async () => {
-    setState((s) => ({ ...s, apkDownloading: true, apkDownloadProgress: 0, apkError: null }));
-    try {
-      const res = await fetch(RELEASES_URL, {
-        headers: { Accept: "application/vnd.github+json" },
-      });
-      if (!res.ok) throw new Error("Could not reach GitHub releases");
-      const release = (await res.json()) as GithubRelease;
+      if (latestBuild <= currentBuild) return;
+
+      // Newer build found — start forced download
       const asset = release.assets?.find((a) => a.name.endsWith(".apk"));
-      if (!asset) throw new Error("No APK found in latest release");
+      if (!asset) return;
+
+      setState((s) => ({
+        ...s,
+        isUpdating: true,
+        updateProgress: 0,
+        updateError: null,
+        latestBuild,
+      }));
 
       const localUri = `${FileSystem.cacheDirectory ?? ""}kiosk-update.apk`;
 
@@ -95,15 +112,15 @@ export function useAppUpdate(): UseAppUpdateResult {
         (progress: FileSystem.DownloadProgressData) => {
           const total = progress.totalBytesExpectedToWrite;
           const pct = total > 0 ? progress.totalBytesWritten / total : 0;
-          setState((s) => ({ ...s, apkDownloadProgress: pct }));
+          setState((s) => ({ ...s, updateProgress: pct }));
         }
       );
 
       await download.downloadAsync();
 
       const contentUri = await FileSystem.getContentUriAsync(localUri);
-      setState((s) => ({ ...s, apkDownloading: false }));
 
+      // Hand off to Android package installer
       await IntentLauncher.startActivityAsync(
         "android.intent.action.INSTALL_PACKAGE",
         {
@@ -112,38 +129,52 @@ export function useAppUpdate(): UseAppUpdateResult {
           type: "application/vnd.android.package-archive",
         }
       );
+
+      setState((s) => ({ ...s, isUpdating: false }));
     } catch (e) {
       setState((s) => ({
         ...s,
-        apkDownloading: false,
-        apkError: e instanceof Error ? e.message : "Update failed",
+        isUpdating: false,
+        updateError: e instanceof Error ? e.message : "Update failed",
       }));
     }
   }, []);
 
-  useEffect(() => {
-    if (checked.current) return;
-    checked.current = true;
+  /** Schedule the next evening check, then reschedule every 24 h. */
+  const scheduleEveningCheck = useCallback(() => {
+    const delay = msUntilHour(EVENING_HOUR);
+    eveningTimer.current = setTimeout(() => {
+      void forceUpdateIfAvailable();
+      scheduleEveningCheck(); // reschedule for same time tomorrow
+    }, delay);
+  }, [forceUpdateIfAvailable]);
 
-    // EAS OTA update check — 5 s after startup
+  useEffect(() => {
+    if (launchChecked.current) return;
+    launchChecked.current = true;
+
+    // 1. EAS OTA bundle update — 5 s after launch
     const t1 = setTimeout(() => {
       void applyEASUpdate();
     }, 5_000);
 
-    // APK version check — 10 s after startup
+    // 2. APK version check — 10 s after launch (forced install if newer)
     const t2 = setTimeout(() => {
-      void checkAPKUpdate();
+      void forceUpdateIfAvailable();
     }, 10_000);
+
+    // 3. Daily evening check
+    scheduleEveningCheck();
 
     return () => {
       clearTimeout(t1);
       clearTimeout(t2);
+      if (eveningTimer.current) clearTimeout(eveningTimer.current);
     };
-  }, [checkAPKUpdate]);
+  }, [forceUpdateIfAvailable, scheduleEveningCheck]);
 
   return {
     ...state,
-    installAPK,
-    checkNow: checkAPKUpdate,
+    checkNow: forceUpdateIfAvailable,
   };
 }

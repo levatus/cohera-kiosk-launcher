@@ -32,14 +32,8 @@ const EXIT_PIN = process.env.EXPO_PUBLIC_KIOSK_EXIT_PIN ?? "1234";
 export default function KioskScreen() {
   useKeepAwake();
 
-  const {
-    apkUpdateAvailable,
-    apkLatestBuild,
-    apkDownloading,
-    apkDownloadProgress,
-    apkError,
-    installAPK,
-  } = useAppUpdate();
+  const { isUpdating, updateProgress, updateError, latestBuild, checkNow } =
+    useAppUpdate();
 
   const webViewRef = useRef<WebView>(null);
   const [canGoBack, setCanGoBack] = useState(false);
@@ -212,6 +206,34 @@ export default function KioskScreen() {
         <View style={styles.screenOffOverlay} pointerEvents="box-only" />
       )}
 
+      {/* Full-screen update overlay — non-dismissible */}
+      {isUpdating && (
+        <View style={styles.updateOverlay} pointerEvents="box-only">
+          <Text style={styles.updateIcon}>📦</Text>
+          <Text style={styles.updateTitle}>Installing Update</Text>
+          <Text style={styles.updateBuild}>
+            {latestBuild > 0 ? `Build ${latestBuild}` : "Downloading…"}
+          </Text>
+          <View style={styles.progressTrack}>
+            <View
+              style={[
+                styles.progressFill,
+                { width: `${Math.round(updateProgress * 100)}%` },
+              ]}
+            />
+          </View>
+          <Text style={styles.progressPct}>
+            {Math.round(updateProgress * 100)}%
+          </Text>
+          {updateError != null && (
+            <Text style={styles.updateError}>{updateError}</Text>
+          )}
+          <Text style={styles.updateSub}>
+            Please do not turn off the tablet.
+          </Text>
+        </View>
+      )}
+
       <LongPressEscapeButton onEscape={handleEscapeHold} />
 
       <PinModal
@@ -226,12 +248,7 @@ export default function KioskScreen() {
         onExitKiosk={handleExitKiosk}
         onSchedule={handleOpenSchedule}
         onDismiss={handleAdminDismiss}
-        apkUpdateAvailable={apkUpdateAvailable}
-        apkLatestBuild={apkLatestBuild}
-        apkDownloading={apkDownloading}
-        apkDownloadProgress={apkDownloadProgress}
-        apkError={apkError}
-        onInstallUpdate={installAPK}
+        onCheckForUpdates={checkNow}
       />
 
       <ScheduleModal
@@ -293,6 +310,60 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "#000",
     zIndex: 10,
+  },
+  updateOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "#0a1628",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 48,
+    gap: 12,
+    zIndex: 20,
+  },
+  updateIcon: {
+    fontSize: 56,
+    marginBottom: 8,
+  },
+  updateTitle: {
+    color: "#fff",
+    fontSize: 26,
+    fontWeight: "700" as const,
+    textAlign: "center",
+  },
+  updateBuild: {
+    color: "rgba(255,255,255,0.5)",
+    fontSize: 14,
+    textAlign: "center",
+    marginBottom: 8,
+  },
+  progressTrack: {
+    width: "100%",
+    height: 6,
+    backgroundColor: "rgba(255,255,255,0.12)",
+    borderRadius: 3,
+    overflow: "hidden",
+  },
+  progressFill: {
+    height: 6,
+    backgroundColor: "#4a9eff",
+    borderRadius: 3,
+  },
+  progressPct: {
+    color: "#4a9eff",
+    fontSize: 16,
+    fontWeight: "600" as const,
+  },
+  updateError: {
+    color: "#ff7070",
+    fontSize: 13,
+    textAlign: "center",
+    marginTop: 4,
+  },
+  updateSub: {
+    color: "rgba(255,255,255,0.35)",
+    fontSize: 13,
+    textAlign: "center",
+    marginTop: 8,
   },
   webPlaceholder: {
     flex: 1,
