@@ -1,5 +1,6 @@
 {
   "expo": {
+    "owner": "slinuw",
     "name": "Kiosk Launcher",
     "slug": "kiosk-launcher",
     "version": "1.0.0",
