@@ -118,6 +118,8 @@ export default function KioskScreen() {
       autoLockTimer.current = null;
     }
     await startLock();
+    NavigationBar.setVisibilityAsync("hidden").catch(() => {});
+    NavigationBar.setBehaviorAsync("overlay-swipe").catch(() => {});
     setIsKioskLocked(true);
   }, []);
 
@@ -142,6 +144,7 @@ export default function KioskScreen() {
   const handleUnlockKiosk = useCallback(async () => {
     setAdminVisible(false);
     await stopLock();
+    NavigationBar.setVisibilityAsync("visible").catch(() => {});
     setIsKioskLocked(false);
     // Auto-lock after 2 minutes of unlocked use
     autoLockTimer.current = setTimeout(() => {
