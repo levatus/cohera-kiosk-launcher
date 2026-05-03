@@ -3,7 +3,7 @@
  *
  * Shown after a successful PIN entry.
  * Lets staff choose between admin settings, unlocking the kiosk,
- * signing out, or triggering an app update check.
+ * or triggering an app update check.
  */
 
 import React from "react";
@@ -12,7 +12,6 @@ import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 interface Props {
   visible: boolean;
   onUnlockKiosk: () => void;
-  onSignOut: () => void;
   onSchedule: () => void;
   onDismiss: () => void;
   onCheckForUpdates: () => void;
@@ -21,7 +20,6 @@ interface Props {
 export function AdminMenu({
   visible,
   onUnlockKiosk,
-  onSignOut,
   onSchedule,
   onDismiss,
   onCheckForUpdates,
@@ -65,14 +63,6 @@ export function AdminMenu({
             <View style={s.itemText}>
               <Text style={[s.itemTitle, s.unlockTitle]}>Unlock Kiosk</Text>
               <Text style={s.itemSub}>Exit lock-task mode — tablet can be used freely</Text>
-            </View>
-          </Pressable>
-
-          <Pressable style={[s.item, s.signOutItem]} onPress={onSignOut}>
-            <Text style={s.icon}>↩️</Text>
-            <View style={s.itemText}>
-              <Text style={[s.itemTitle, s.signOutTitle]}>Sign Out</Text>
-              <Text style={s.itemSub}>Return to login screen — device stays pinned</Text>
             </View>
           </Pressable>
 

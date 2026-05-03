@@ -147,15 +147,6 @@ export default function KioskScreen() {
     }, AUTO_LOCK_DELAY_MS);
   }, [lockKiosk]);
 
-  const handleSignOut = useCallback(() => {
-    setAdminVisible(false);
-    const logoutUrl = `${EMR_URL}/auth/signout`;
-    if (webViewRef.current) {
-      webViewRef.current.injectJavaScript(`window.location.href = ${JSON.stringify(logoutUrl)}; true;`);
-    }
-    lockKiosk();
-  }, [lockKiosk]);
-
   const handleOpenSchedule = useCallback(() => {
     setAdminVisible(false);
     setScheduleVisible(true);
@@ -302,7 +293,6 @@ export default function KioskScreen() {
       <AdminMenu
         visible={adminVisible}
         onUnlockKiosk={handleUnlockKiosk}
-        onSignOut={handleSignOut}
         onSchedule={handleOpenSchedule}
         onDismiss={handleAdminDismiss}
         onCheckForUpdates={checkNow}
