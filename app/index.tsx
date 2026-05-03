@@ -145,6 +145,7 @@ export default function KioskScreen() {
     setAdminVisible(false);
     await stopLock();
     NavigationBar.setVisibilityAsync("visible").catch(() => {});
+    NavigationBar.setBehaviorAsync("inset-swipe").catch(() => {});
     setIsKioskLocked(false);
     // Auto-lock after 2 minutes of unlocked use
     autoLockTimer.current = setTimeout(() => {
@@ -155,6 +156,13 @@ export default function KioskScreen() {
   const handleOpenSchedule = useCallback(() => {
     setAdminVisible(false);
     setScheduleVisible(true);
+  }, []);
+
+  const handleSignOut = useCallback(() => {
+    setAdminVisible(false);
+    webViewRef.current?.injectJavaScript(
+      "if(window.__KIOSK_SIGN_OUT__){window.__KIOSK_SIGN_OUT__();}true;"
+    );
   }, []);
 
   const handleAdminDismiss = useCallback(() => setAdminVisible(false), []);
@@ -309,6 +317,7 @@ export default function KioskScreen() {
         onSchedule={handleOpenSchedule}
         onDismiss={handleAdminDismiss}
         onCheckForUpdates={checkNow}
+        onSignOut={handleSignOut}
       />
 
       <ScheduleModal
