@@ -166,6 +166,7 @@ export default function KioskScreen() {
         style={styles.webview}
         javaScriptEnabled
         domStorageEnabled
+        incognito
         allowsInlineMediaPlayback
         mediaPlaybackRequiresUserAction={false}
         mixedContentMode="always"
@@ -174,9 +175,6 @@ export default function KioskScreen() {
         injectedJavaScript={injectedJs}
         onShouldStartLoadWithRequest={() => true}
         setSupportMultipleWindows={false}
-        sharedCookiesEnabled
-        thirdPartyCookiesEnabled
-        cacheEnabled
         startInLoadingState
         geolocationEnabled={false}
         androidLayerType="hardware"
