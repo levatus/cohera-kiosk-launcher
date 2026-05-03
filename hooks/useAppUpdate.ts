@@ -12,6 +12,7 @@ const RELEASES_URL = `https://api.github.com/repos/${GITHUB_REPO}/releases/lates
 const EVENING_HOUR = 21; // 9 PM
 
 export interface AppUpdateState {
+  isChecking: boolean;
   isUpdating: boolean;
   updateProgress: number;
   updateError: string | null;
@@ -63,6 +64,7 @@ export function useAppUpdate(): UseAppUpdateResult {
   const eveningTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [state, setState] = useState<AppUpdateState>({
+    isChecking: true,
     isUpdating: false,
     updateProgress: 0,
     updateError: null,
@@ -74,22 +76,35 @@ export function useAppUpdate(): UseAppUpdateResult {
    * If found, download and launch the Android package installer immediately.
    */
   const forceUpdateIfAvailable = useCallback(async () => {
-    if (Platform.OS !== "android") return;
+    if (Platform.OS !== "android") {
+      setState((s) => ({ ...s, isChecking: false }));
+      return;
+    }
 
+    setState((s) => ({ ...s, isChecking: true }));
     try {
       const res = await fetch(RELEASES_URL, {
         headers: { Accept: "application/vnd.github+json" },
       });
-      if (!res.ok) return;
+      if (!res.ok) {
+        setState((s) => ({ ...s, isChecking: false }));
+        return;
+      }
 
       const release = (await res.json()) as GithubRelease;
       const match = release.tag_name?.match(/^build-(\d+)$/);
-      if (!match) return;
+      if (!match) {
+        setState((s) => ({ ...s, isChecking: false }));
+        return;
+      }
 
       const latestBuild = parseInt(match[1], 10);
       const currentBuild = Constants.expoConfig?.android?.versionCode ?? 1;
 
-      if (latestBuild <= currentBuild) return;
+      if (latestBuild <= currentBuild) {
+        setState((s) => ({ ...s, isChecking: false }));
+        return;
+      }
 
       // Newer build found — start forced download
       const asset = release.assets?.find((a) => a.name.endsWith(".apk"));
@@ -97,6 +112,7 @@ export function useAppUpdate(): UseAppUpdateResult {
 
       setState((s) => ({
         ...s,
+        isChecking: false,
         isUpdating: true,
         updateProgress: 0,
         updateError: null,
@@ -134,6 +150,7 @@ export function useAppUpdate(): UseAppUpdateResult {
     } catch (e) {
       setState((s) => ({
         ...s,
+        isChecking: false,
         isUpdating: false,
         updateError: e instanceof Error ? e.message : "Update failed",
       }));
@@ -153,22 +170,16 @@ export function useAppUpdate(): UseAppUpdateResult {
     if (launchChecked.current) return;
     launchChecked.current = true;
 
-    // 1. EAS OTA bundle update — 5 s after launch
-    const t1 = setTimeout(() => {
+    // 1. APK version check — immediately on launch before WebView is shown
+    void forceUpdateIfAvailable().then(() => {
+      // 2. EAS OTA bundle check — after APK check resolves
       void applyEASUpdate();
-    }, 5_000);
-
-    // 2. APK version check — 10 s after launch (forced install if newer)
-    const t2 = setTimeout(() => {
-      void forceUpdateIfAvailable();
-    }, 10_000);
+    });
 
     // 3. Daily evening check
     scheduleEveningCheck();
 
     return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
       if (eveningTimer.current) clearTimeout(eveningTimer.current);
     };
   }, [forceUpdateIfAvailable, scheduleEveningCheck]);

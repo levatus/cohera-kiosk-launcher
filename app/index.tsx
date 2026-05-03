@@ -32,7 +32,7 @@ const EXIT_PIN = process.env.EXPO_PUBLIC_KIOSK_EXIT_PIN ?? "1234";
 export default function KioskScreen() {
   useKeepAwake();
 
-  const { isUpdating, updateProgress, updateError, latestBuild, checkNow } =
+  const { isChecking, isUpdating, updateProgress, updateError, latestBuild, checkNow } =
     useAppUpdate();
 
   const webViewRef = useRef<WebView>(null);
@@ -164,28 +164,37 @@ export default function KioskScreen() {
     <View style={styles.container}>
       <StatusBar hidden />
 
-      <WebView
-        ref={webViewRef}
-        source={{ uri: EMR_URL }}
-        style={styles.webview}
-        javaScriptEnabled
-        domStorageEnabled
-        incognito
-        allowsInlineMediaPlayback
-        mediaPlaybackRequiresUserAction={false}
-        mixedContentMode="always"
-        allowsFullscreenVideo
-        onNavigationStateChange={onNavigationStateChange}
-        injectedJavaScript={injectedJs}
-        onShouldStartLoadWithRequest={() => true}
-        setSupportMultipleWindows={false}
-        startInLoadingState
-        geolocationEnabled={false}
-        androidLayerType="hardware"
-        onLoad={handleWebViewLoad}
-        onError={handleWebViewError}
-        onHttpError={handleWebViewError}
-      />
+      {/* Checking splash — shown instead of the WebView while the launch update check runs */}
+      {isChecking ? (
+        <View style={styles.checkingOverlay}>
+          <Text style={styles.checkingIcon}>🏥</Text>
+          <Text style={styles.checkingTitle}>Cohera Kiosk</Text>
+          <Text style={styles.checkingSub}>Checking for updates…</Text>
+        </View>
+      ) : (
+        <WebView
+          ref={webViewRef}
+          source={{ uri: EMR_URL }}
+          style={styles.webview}
+          javaScriptEnabled
+          domStorageEnabled
+          incognito
+          allowsInlineMediaPlayback
+          mediaPlaybackRequiresUserAction={false}
+          mixedContentMode="always"
+          allowsFullscreenVideo
+          onNavigationStateChange={onNavigationStateChange}
+          injectedJavaScript={injectedJs}
+          onShouldStartLoadWithRequest={() => true}
+          setSupportMultipleWindows={false}
+          startInLoadingState
+          geolocationEnabled={false}
+          androidLayerType="hardware"
+          onLoad={handleWebViewLoad}
+          onError={handleWebViewError}
+          onHttpError={handleWebViewError}
+        />
+      )}
 
       {hasError && (
         <View style={styles.errorOverlay}>
@@ -310,6 +319,28 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "#000",
     zIndex: 10,
+  },
+  checkingOverlay: {
+    flex: 1,
+    backgroundColor: "#0a1628",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+  },
+  checkingIcon: {
+    fontSize: 56,
+    marginBottom: 8,
+  },
+  checkingTitle: {
+    color: "#fff",
+    fontSize: 28,
+    fontWeight: "700" as const,
+    textAlign: "center",
+  },
+  checkingSub: {
+    color: "rgba(255,255,255,0.4)",
+    fontSize: 15,
+    textAlign: "center",
   },
   updateOverlay: {
     ...StyleSheet.absoluteFillObject,
