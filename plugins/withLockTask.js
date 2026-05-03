@@ -20,6 +20,9 @@ const fs = require("fs");
 const LOCK_TASK_MODULE_KT = (packageName) => `\
 package ${packageName}
 
+import android.app.admin.DevicePolicyManager
+import android.content.ComponentName
+import android.content.Context
 import android.os.Build
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
@@ -31,6 +34,26 @@ class LockTaskModule(reactContext: ReactApplicationContext) :
 
     override fun getName(): String = "LockTaskModule"
 
+    /**
+     * If this app is the Device Owner, whitelist itself for lock-task mode.
+     * This suppresses the Android "unpin" prompt entirely — the user cannot
+     * exit via Back+Overview or any system gesture.
+     */
+    private fun whitelistSelf() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) return
+        try {
+            val dpm = reactApplicationContext
+                .getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+            val admin = ComponentName(
+                reactApplicationContext,
+                KioskDeviceAdminReceiver::class.java
+            )
+            if (dpm.isDeviceOwnerApp(reactApplicationContext.packageName)) {
+                dpm.setLockTaskPackages(admin, arrayOf(reactApplicationContext.packageName))
+            }
+        } catch (_: Exception) {}
+    }
+
     @ReactMethod
     fun startLock(promise: Promise) {
         val activity = reactApplicationContext.currentActivity
@@ -39,6 +62,7 @@ class LockTaskModule(reactContext: ReactApplicationContext) :
             return
         }
         try {
+            whitelistSelf()
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 activity.startLockTask()
             }
@@ -125,7 +149,14 @@ function patchMainActivity(config) {
   override fun onResume() {
     super.onResume()
     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
-      try { startLockTask() } catch (e: Exception) { /* no-op if not device owner */ }
+      try {
+        val dpm = getSystemService(android.content.Context.DEVICE_POLICY_SERVICE) as android.app.admin.DevicePolicyManager
+        val admin = android.content.ComponentName(this, KioskDeviceAdminReceiver::class.java)
+        if (dpm.isDeviceOwnerApp(packageName)) {
+          dpm.setLockTaskPackages(admin, arrayOf(packageName))
+        }
+        startLockTask()
+      } catch (e: Exception) { /* no-op if not device owner */ }
     }
   }`;
 
