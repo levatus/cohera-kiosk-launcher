@@ -35,7 +35,8 @@
       "expo-font",
       "./plugins/withKioskAndroid",
       "./plugins/withLockTask",
-      "./plugins/withScreenControl"
+      "./plugins/withScreenControl",
+      "./plugins/withDeviceAdmin"
     ],
     "experiments": {
       "typedRoutes": true
