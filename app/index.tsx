@@ -16,6 +16,7 @@ import { LongPressEscapeButton } from "@/components/LongPressEscapeButton";
 import { PinModal } from "@/components/PinModal";
 import { ScheduleModal } from "@/components/ScheduleModal";
 import { useScreenSchedule } from "@/hooks/useScreenSchedule";
+import { useAppUpdate } from "@/hooks/useAppUpdate";
 import { startLock, stopLock } from "@/modules/LockTask";
 
 const EMR_URL =
@@ -30,6 +31,15 @@ const EXIT_PIN = process.env.EXPO_PUBLIC_KIOSK_EXIT_PIN ?? "1234";
 
 export default function KioskScreen() {
   useKeepAwake();
+
+  const {
+    apkUpdateAvailable,
+    apkLatestBuild,
+    apkDownloading,
+    apkDownloadProgress,
+    apkError,
+    installAPK,
+  } = useAppUpdate();
 
   const webViewRef = useRef<WebView>(null);
   const [canGoBack, setCanGoBack] = useState(false);
@@ -216,6 +226,12 @@ export default function KioskScreen() {
         onExitKiosk={handleExitKiosk}
         onSchedule={handleOpenSchedule}
         onDismiss={handleAdminDismiss}
+        apkUpdateAvailable={apkUpdateAvailable}
+        apkLatestBuild={apkLatestBuild}
+        apkDownloading={apkDownloading}
+        apkDownloadProgress={apkDownloadProgress}
+        apkError={apkError}
+        onInstallUpdate={installAPK}
       />
 
       <ScheduleModal
