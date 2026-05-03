@@ -60,6 +60,25 @@ eas build --platform android --profile production
 
 ---
 
+## Enabling OS-level lockdown (Device Owner — one-time ADB setup)
+
+After installing the APK on a fresh tablet, run the following command **once** from a computer connected via USB:
+
+```bash
+adb shell dpm set-device-owner com.clinic.kioskbrowser/.KioskDeviceAdminReceiver
+```
+
+**Important prerequisites before running this command:**
+- The tablet must have **no Google accounts** signed in. Go to Settings → Accounts and remove all accounts first.
+- USB debugging must be enabled (Settings → Developer options → USB debugging).
+- The kiosk APK must already be installed on the tablet.
+
+Once Device Owner is set, the app will automatically enter true lock-task mode on every launch — the home button, back button, recents, and USB debugging are all disabled at the OS level. The existing escape hatch (5-second long press + PIN) still exits lock-task mode normally.
+
+> **Note:** Device Owner status persists across app updates and reboots. It only needs to be set once per tablet. To remove it, you must factory reset the device.
+
+---
+
 ## Uploading to your MDM
 
 Once you have the APK file:
