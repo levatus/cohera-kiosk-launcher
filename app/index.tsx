@@ -5,6 +5,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   BackHandler,
   Platform,
+  Pressable,
   StyleSheet,
   Text,
   View,
@@ -32,6 +33,8 @@ export default function KioskScreen() {
 
   const webViewRef = useRef<WebView>(null);
   const [canGoBack, setCanGoBack] = useState(false);
+  const [hasError, setHasError] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Modal visibility
   const [pinVisible, setPinVisible] = useState(false);
@@ -73,6 +76,22 @@ export default function KioskScreen() {
     },
     []
   );
+
+  const handleWebViewError = useCallback(() => {
+    setHasError(true);
+    setIsLoading(false);
+  }, []);
+
+  const handleWebViewLoad = useCallback(() => {
+    setHasError(false);
+    setIsLoading(false);
+  }, []);
+
+  const handleRetry = useCallback(() => {
+    setHasError(false);
+    setIsLoading(true);
+    webViewRef.current?.reload();
+  }, []);
 
   // 5-second hold → PIN prompt
   const handleEscapeHold = useCallback(() => {
@@ -140,6 +159,7 @@ export default function KioskScreen() {
   return (
     <View style={styles.container}>
       <StatusBar hidden />
+
       <WebView
         ref={webViewRef}
         source={{ uri: EMR_URL }}
@@ -157,14 +177,29 @@ export default function KioskScreen() {
         sharedCookiesEnabled
         thirdPartyCookiesEnabled
         cacheEnabled
-        startInLoadingState={false}
+        startInLoadingState
         geolocationEnabled={false}
         androidLayerType="hardware"
+        onLoad={handleWebViewLoad}
+        onError={handleWebViewError}
+        onHttpError={handleWebViewError}
       />
 
-      {/* Black overlay when schedule says screen should be off.
-          Shown as a fallback when DevicePolicyManager.lockNow() is
-          not available (app is not Device Admin). */}
+      {hasError && (
+        <View style={styles.errorOverlay}>
+          <Text style={styles.errorIcon}>⚠️</Text>
+          <Text style={styles.errorTitle}>Unable to Connect</Text>
+          <Text style={styles.errorSub}>
+            Could not reach the check-in system.{"\n"}
+            Please check the Wi-Fi connection.
+          </Text>
+          <Pressable style={styles.retryButton} onPress={handleRetry}>
+            <Text style={styles.retryText}>Try Again</Text>
+          </Pressable>
+        </View>
+      )}
+
+      {/* Black overlay when schedule says screen should be off. */}
       {!screenOn && (
         <View style={styles.screenOffOverlay} pointerEvents="box-only" />
       )}
@@ -202,6 +237,43 @@ const styles = StyleSheet.create({
   },
   webview: {
     flex: 1,
+  },
+  errorOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "#0a1628",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 40,
+    gap: 12,
+    zIndex: 5,
+  },
+  errorIcon: {
+    fontSize: 48,
+    marginBottom: 8,
+  },
+  errorTitle: {
+    color: "#fff",
+    fontSize: 22,
+    fontWeight: "700" as const,
+    textAlign: "center",
+  },
+  errorSub: {
+    color: "rgba(255,255,255,0.55)",
+    fontSize: 15,
+    textAlign: "center",
+    lineHeight: 22,
+  },
+  retryButton: {
+    marginTop: 16,
+    backgroundColor: "#4a9eff",
+    paddingVertical: 14,
+    paddingHorizontal: 40,
+    borderRadius: 12,
+  },
+  retryText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600" as const,
   },
   screenOffOverlay: {
     ...StyleSheet.absoluteFillObject,
