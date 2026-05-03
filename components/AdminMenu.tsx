@@ -15,6 +15,7 @@ interface Props {
   onSchedule: () => void;
   onDismiss: () => void;
   onCheckForUpdates: () => void;
+  onSignOut: () => void;
 }
 
 export function AdminMenu({
@@ -23,6 +24,7 @@ export function AdminMenu({
   onSchedule,
   onDismiss,
   onCheckForUpdates,
+  onSignOut,
 }: Props) {
   return (
     <Modal
@@ -63,6 +65,14 @@ export function AdminMenu({
             <View style={s.itemText}>
               <Text style={[s.itemTitle, s.unlockTitle]}>Unlock Kiosk</Text>
               <Text style={s.itemSub}>Exit lock-task mode — tablet can be used freely</Text>
+            </View>
+          </Pressable>
+
+          <Pressable style={[s.item, s.signOutItem]} onPress={onSignOut}>
+            <Text style={s.icon}>🚪</Text>
+            <View style={s.itemText}>
+              <Text style={[s.itemTitle, s.signOutTitle]}>Sign Out</Text>
+              <Text style={s.itemSub}>Log out of the kiosk session</Text>
             </View>
           </Pressable>
 
