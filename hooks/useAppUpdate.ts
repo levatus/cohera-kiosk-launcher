@@ -44,6 +44,8 @@ export interface AppUpdateState {
   progress: number;
   error: string | null;
   phase: UpdatePhase;
+  /** No-op: download starts automatically when an update is detected. */
+  startUpdate: () => void;
 }
 
 export function useAppUpdate(): AppUpdateState {
@@ -168,5 +170,8 @@ export function useAppUpdate(): AppUpdateState {
     progress,
     error,
     phase,
+    startUpdate: () => {
+      // Download begins automatically when an update is detected; this is a no-op.
+    },
   };
 }

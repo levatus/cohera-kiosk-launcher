@@ -34,7 +34,6 @@ export default function KioskScreen() {
     updateAvailable,
     downloading,
     progress,
-    error: updateError,
     phase,
   } = useAppUpdate();
 
@@ -135,7 +134,7 @@ export default function KioskScreen() {
                 : `Please keep the app open. The kiosk will restart automatically.`}
             </Text>
 
-            {phase === "downloading" && (
+            {downloading && (
               <>
                 <View style={styles.progressTrack}>
                   <View
@@ -158,13 +157,7 @@ export default function KioskScreen() {
         </View>
       )}
 
-      {phase === "error" && updateError && (
-        <View style={styles.updateErrorBanner}>
-          <Text style={styles.updateErrorText} numberOfLines={2}>
-            Update check failed — {updateError}
-          </Text>
-        </View>
-      )}
+      {/* Update check errors are intentionally silent — the WebView continues normally */}
     </View>
   );
 }
