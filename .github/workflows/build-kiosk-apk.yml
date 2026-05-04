@@ -50,7 +50,6 @@ jobs:
           BUILD_ID=$(echo "$BUILD_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])")
           echo "build_id=$BUILD_ID" >> $GITHUB_OUTPUT
           echo "Waiting for build $BUILD_ID..."
-          eas build:view "$BUILD_ID" --json > /dev/null
           while true; do
             STATUS=$(eas build:view "$BUILD_ID" --json | python3 -c "import sys,json; print(json.load(sys.stdin)['status'])")
             echo "Status: $STATUS"
@@ -72,30 +71,3 @@ jobs:
             --notes "Auto-built from commit ${{ github.sha }}" \
             --latest
           echo "Published: $TAG"
-  eas-update:
-    name: Push EAS OTA Update
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push'
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
-      - name: Install dependencies
-        run: pnpm install --no-frozen-lockfile
-      - name: Setup EAS
-        uses: expo/expo-github-action@v8
-        with:
-          eas-version: latest
-          token: ${{ secrets.EXPO_TOKEN }}
-      - name: Link EAS project
-        run: eas init --non-interactive --force
-        continue-on-error: true
-      - name: Push OTA update
-        run: eas update --branch production --message "Auto-update from ${{ github.sha }}" --non-interactive
