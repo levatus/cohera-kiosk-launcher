@@ -8,7 +8,7 @@ permissions:
   contents: write
 jobs:
   build:
-    name: Build Android APK
+    name: Build Android APK (local)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -23,6 +23,23 @@ jobs:
           version: 9
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
+      - name: Auto-increment versionCode
+        env:
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          python3 -c "
+          import json, os
+          app = json.load(open('app.json'))
+          vc = int(os.environ['RUN_NUMBER'])
+          app['expo']['android']['versionCode'] = vc
+          json.dump(app, open('app.json','w'), indent=2)
+          print('versionCode set to', vc)
+          "
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
       - name: Setup EAS
         uses: expo/expo-github-action@v8
         with:
@@ -31,32 +48,20 @@ jobs:
       - name: Link EAS project
         run: eas init --non-interactive --force
         continue-on-error: true
-      - name: Build APK
-        run: eas build --platform android --profile production --non-interactive
+      - name: Build APK on GitHub runner (no Expo cloud slot)
+        run: eas build --platform android --profile production --non-interactive --local --output ./kiosk-update.apk
       - name: Publish APK to GitHub Releases
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          BUILD_JSON=$(eas build:list --platform android --limit 1 --json --non-interactive 2>/dev/null || echo "[]")
-          APK_URL=$(echo "$BUILD_JSON" | node -e "
-            try {
-              const a = JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
-              if (a[0]?.artifacts?.buildUrl) console.log(a[0].artifacts.buildUrl);
-            } catch(e) {}
-          ")
-          VERSION_CODE=$(node -e "const a=require('./app.json');console.log(a.expo.android.versionCode)")
-          if [ -n "$APK_URL" ]; then
-            curl -L -o kiosk-update.apk "$APK_URL"
-            TAG="build-$VERSION_CODE"
-            gh release delete "$TAG" --yes 2>/dev/null || true
-            gh release create "$TAG" kiosk-update.apk \
-              --title "Kiosk APK build $VERSION_CODE" \
-              --notes "Auto-built from commit ${{ github.sha }}" \
-              --latest
-            echo "Published to GitHub Releases: $TAG"
-          else
-            echo "No APK URL found, skipping release"
-          fi
+          VERSION_CODE=${{ github.run_number }}
+          TAG="build-${VERSION_CODE}"
+          gh release delete "$TAG" --yes 2>/dev/null || true
+          gh release create "$TAG" kiosk-update.apk \
+            --title "Kiosk APK build ${VERSION_CODE}" \
+            --notes "Auto-built from commit ${{ github.sha }}" \
+            --latest
+          echo "Published: $TAG"
   eas-update:
     name: Push EAS OTA Update
     runs-on: ubuntu-latest
