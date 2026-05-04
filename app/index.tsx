@@ -2,6 +2,7 @@ import { useKeepAwake } from "expo-keep-awake";
 import { StatusBar } from "expo-status-bar";
 import React, { useCallback, useRef, useState } from "react";
 import {
+  Animated,
   Platform,
   Pressable,
   StyleSheet,
@@ -10,6 +11,7 @@ import {
 } from "react-native";
 import { WebView } from "react-native-webview";
 import { useScreenSchedule } from "@/hooks/useScreenSchedule";
+import { useAppUpdate } from "@/hooks/useAppUpdate";
 
 const EMR_URL =
   process.env.EXPO_PUBLIC_EMR_URL ?? "https://health-record-hub-slinuw.replit.app";
@@ -27,6 +29,8 @@ export default function KioskScreen() {
   const { screenOn } = useScreenSchedule({
     onRefresh: handleScheduledRefresh,
   });
+
+  const { phase, progress, error: updateError } = useAppUpdate();
 
   const handleWebViewError = useCallback(() => {
     setHasError(true);
@@ -48,6 +52,9 @@ export default function KioskScreen() {
     })();
     true;
   `;
+
+  const isUpdating =
+    phase === "downloading" || phase === "installing";
 
   return (
     <View style={styles.container}>
@@ -102,6 +109,56 @@ export default function KioskScreen() {
 
       {!screenOn && (
         <View style={styles.screenOffOverlay} pointerEvents="box-only" />
+      )}
+
+      {isUpdating && (
+        <View style={styles.updateOverlay}>
+          <View style={styles.updateCard}>
+            <View style={styles.updateLogo}>
+              <Text style={styles.updateLogoText}>cohera</Text>
+            </View>
+
+            <Text style={styles.updateTitle}>
+              {phase === "installing"
+                ? "Installing update…"
+                : "Update downloading…"}
+            </Text>
+
+            <Text style={styles.updateSub}>
+              {phase === "installing"
+                ? "Follow the on-screen prompt to complete the installation."
+                : `Please keep the app open. The kiosk will restart automatically.`}
+            </Text>
+
+            {phase === "downloading" && (
+              <>
+                <View style={styles.progressTrack}>
+                  <View
+                    style={[
+                      styles.progressFill,
+                      { width: `${progress}%` as unknown as number },
+                    ]}
+                  />
+                </View>
+                <Text style={styles.progressLabel}>{progress}%</Text>
+              </>
+            )}
+
+            {phase === "installing" && (
+              <View style={styles.progressTrack}>
+                <View style={[styles.progressFill, { width: "100%" as unknown as number }]} />
+              </View>
+            )}
+          </View>
+        </View>
+      )}
+
+      {phase === "error" && updateError && (
+        <View style={styles.updateErrorBanner}>
+          <Text style={styles.updateErrorText} numberOfLines={2}>
+            Update check failed — {updateError}
+          </Text>
+        </View>
       )}
     </View>
   );
@@ -158,6 +215,81 @@ const styles = StyleSheet.create({
     backgroundColor: "#000",
     zIndex: 10,
   },
+
+  updateOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "#0a1628",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 20,
+    paddingHorizontal: 32,
+  },
+  updateCard: {
+    width: "100%",
+    maxWidth: 480,
+    alignItems: "center",
+    gap: 16,
+  },
+  updateLogo: {
+    marginBottom: 8,
+  },
+  updateLogoText: {
+    color: "#4a9eff",
+    fontSize: 32,
+    fontWeight: "700" as const,
+    letterSpacing: 2,
+    textTransform: "lowercase" as const,
+  },
+  updateTitle: {
+    color: "#fff",
+    fontSize: 22,
+    fontWeight: "700" as const,
+    textAlign: "center",
+  },
+  updateSub: {
+    color: "rgba(255,255,255,0.55)",
+    fontSize: 14,
+    textAlign: "center",
+    lineHeight: 20,
+    paddingHorizontal: 8,
+  },
+  progressTrack: {
+    width: "100%",
+    height: 6,
+    backgroundColor: "rgba(255,255,255,0.12)",
+    borderRadius: 3,
+    overflow: "hidden",
+    marginTop: 8,
+  },
+  progressFill: {
+    height: 6,
+    backgroundColor: "#4a9eff",
+    borderRadius: 3,
+  },
+  progressLabel: {
+    color: "rgba(255,255,255,0.6)",
+    fontSize: 13,
+    fontWeight: "600" as const,
+    marginTop: 4,
+  },
+
+  updateErrorBanner: {
+    position: "absolute",
+    bottom: 24,
+    left: 24,
+    right: 24,
+    backgroundColor: "rgba(220,60,60,0.85)",
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    zIndex: 30,
+  },
+  updateErrorText: {
+    color: "#fff",
+    fontSize: 12,
+    textAlign: "center",
+  },
+
   webPlaceholder: {
     flex: 1,
     alignItems: "center",
