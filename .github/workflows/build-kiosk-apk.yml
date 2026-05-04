@@ -8,7 +8,7 @@ permissions:
   contents: write
 jobs:
   build:
-    name: Build Android APK (local)
+    name: Build Android APK
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -35,11 +35,6 @@ jobs:
           json.dump(app, open('app.json','w'), indent=2)
           print('versionCode set to', vc)
           "
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 17
       - name: Setup EAS
         uses: expo/expo-github-action@v8
         with:
@@ -48,17 +43,32 @@ jobs:
       - name: Link EAS project
         run: eas init --non-interactive --force
         continue-on-error: true
-      - name: Build APK on GitHub runner (no Expo cloud slot)
-        run: eas build --platform android --profile production --non-interactive --local --output ./kiosk-update.apk
-      - name: Publish APK to GitHub Releases
+      - name: Build APK via Expo cloud
+        id: eas_build
+        run: |
+          BUILD_JSON=$(eas build --platform android --profile production --non-interactive --json --no-wait)
+          BUILD_ID=$(echo "$BUILD_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])")
+          echo "build_id=$BUILD_ID" >> $GITHUB_OUTPUT
+          echo "Waiting for build $BUILD_ID..."
+          eas build:view "$BUILD_ID" --json > /dev/null
+          while true; do
+            STATUS=$(eas build:view "$BUILD_ID" --json | python3 -c "import sys,json; print(json.load(sys.stdin)['status'])")
+            echo "Status: $STATUS"
+            if [ "$STATUS" = "FINISHED" ]; then break; fi
+            if [ "$STATUS" = "ERRORED" ] || [ "$STATUS" = "CANCELED" ]; then exit 1; fi
+            sleep 30
+          done
+          APK_URL=$(eas build:view "$BUILD_ID" --json | python3 -c "import sys,json; print(json.load(sys.stdin)['artifacts']['buildUrl'])")
+          echo "apk_url=$APK_URL" >> $GITHUB_OUTPUT
+      - name: Download APK and publish to GitHub Releases
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          VERSION_CODE=${{ github.run_number }}
-          TAG="build-${VERSION_CODE}"
+          curl -L "${{ steps.eas_build.outputs.apk_url }}" -o kiosk-update.apk
+          TAG="build-${{ github.run_number }}"
           gh release delete "$TAG" --yes 2>/dev/null || true
           gh release create "$TAG" kiosk-update.apk \
-            --title "Kiosk APK build ${VERSION_CODE}" \
+            --title "Kiosk APK build ${{ github.run_number }}" \
             --notes "Auto-built from commit ${{ github.sha }}" \
             --latest
           echo "Published: $TAG"
