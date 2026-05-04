@@ -4,14 +4,6 @@
     "slug": "kiosk-launcher",
     "owner": "slinuw",
     "version": "1.0.0",
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
-    "updates": {
-      "enabled": true,
-      "checkAutomatically": "ON_LOAD",
-      "fallbackToCacheTimeout": 0
-    },
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "kiosk-launcher",
@@ -27,7 +19,7 @@
     },
     "android": {
       "package": "com.clinic.kioskbrowser",
-      "versionCode": 6,
+      "versionCode": 7,
       "softwareKeyboardLayoutMode": "resize",
       "allowBackup": false
     },
@@ -42,12 +34,8 @@
         }
       ],
       "expo-font",
-      "expo-updates",
       "./plugins/withKioskAndroid",
-      "./plugins/withLockTask",
-      "./plugins/withScreenControl",
-      "./plugins/withDeviceAdmin",
-      "./plugins/withInstallPackages"
+      "./plugins/withScreenControl"
     ],
     "experiments": {
       "typedRoutes": true
