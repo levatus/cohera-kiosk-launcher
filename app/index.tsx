@@ -1,3 +1,4 @@
+import Constants from "expo-constants";
 import { useKeepAwake } from "expo-keep-awake";
 import { StatusBar } from "expo-status-bar";
 import React, { useCallback, useRef, useState } from "react";
@@ -10,8 +11,10 @@ import {
   View,
 } from "react-native";
 import { WebView } from "react-native-webview";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useScreenSchedule } from "@/hooks/useScreenSchedule";
 import { useAppUpdate } from "@/hooks/useAppUpdate";
+import { useKioskLock } from "@/hooks/useKioskLock";
 
 const EMR_URL =
   process.env.EXPO_PUBLIC_EMR_URL ?? "https://health-record-hub-slinuw.replit.app";
@@ -21,6 +24,7 @@ export default function KioskScreen() {
 
   const webViewRef = useRef<WebView>(null);
   const [hasError, setHasError] = useState(false);
+  const { isLocked, toggle: toggleLock } = useKioskLock();
 
   const handleScheduledRefresh = useCallback(() => {
     webViewRef.current?.reload();
@@ -50,9 +54,11 @@ export default function KioskScreen() {
     webViewRef.current?.reload();
   }, []);
 
+  const versionCode = Constants.expoConfig?.android?.versionCode ?? null;
   const injectedJs = `
     (function() {
       window.__KIOSK_MODE__ = true;
+      window.__KIOSK_BUILD__ = ${JSON.stringify({ build: versionCode })};
       document.addEventListener('contextmenu', function(e) { e.preventDefault(); }, true);
     })();
     true;
@@ -156,6 +162,18 @@ export default function KioskScreen() {
           </View>
         </View>
       )}
+
+      <Pressable
+        style={styles.lockButton}
+        onPress={toggleLock}
+        hitSlop={12}
+      >
+        <MaterialCommunityIcons
+          name={isLocked ? "lock" : "lock-open-outline"}
+          size={20}
+          color="rgba(255,255,255,0.9)"
+        />
+      </Pressable>
 
       {/* Update check errors are intentionally silent — the WebView continues normally */}
     </View>
@@ -286,6 +304,17 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 12,
     textAlign: "center",
+  },
+
+  lockButton: {
+    position: "absolute",
+    bottom: 24,
+    left: 16,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    borderRadius: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    zIndex: 50,
   },
 
   webPlaceholder: {
