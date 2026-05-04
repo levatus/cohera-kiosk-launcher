@@ -4,7 +4,8 @@ import * as FileSystem from "expo-file-system/legacy";
 import * as IntentLauncher from "expo-intent-launcher";
 import Constants from "expo-constants";
 import { Platform } from "react-native";
-import { installApk, hasNativeInstallApk } from "@/modules/LockTask";
+// installApk / hasNativeInstallApk intentionally removed — all installs use the
+// standard Android dialog so staff can see and confirm each update.
 
 const GITHUB_REPO = "levatus/cohera-kiosk-launcher";
 const RELEASES_URL = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
@@ -139,28 +140,20 @@ export function useAppUpdate(): UseAppUpdateResult {
 
       await download.downloadAsync();
 
-      // Mark as 100% then hand off to installer.
+      // Mark as 100% then prompt the user to install.
+      // Always show the standard Android install dialog — staff can see and
+      // confirm each update before it applies.
       setState((s) => ({ ...s, updateProgress: 1 }));
 
-      if (hasNativeInstallApk) {
-        // Build 5+: silent Device Owner install via PackageInstaller.
-        // Android kills and relaunches the app — this line rarely executes.
-        await installApk(localUri);
-        setState((s) => ({ ...s, isUpdating: false }));
-      } else {
-        // Pre-build-5 bootstrap fallback: show the standard Android install
-        // dialog. The user taps "Install" once; after that build 5 is live
-        // and all future updates are fully silent.
-        const contentUri = await FileSystem.getContentUriAsync(localUri);
-        await IntentLauncher.startActivityAsync("android.intent.action.VIEW", {
-          data: contentUri,
-          type: "application/vnd.android.package-archive",
-          flags: 1,
-        });
-        // Reached only if the user cancelled the dialog (on success the system
-        // kills this process and restarts the new APK).
-        setState((s) => ({ ...s, isUpdating: false }));
-      }
+      const contentUri = await FileSystem.getContentUriAsync(localUri);
+      await IntentLauncher.startActivityAsync("android.intent.action.VIEW", {
+        data: contentUri,
+        type: "application/vnd.android.package-archive",
+        flags: 1,
+      });
+      // Reached only if the user cancelled the dialog.
+      // On successful install Android restarts the app automatically.
+      setState((s) => ({ ...s, isUpdating: false }));
     } catch (e) {
       setState((s) => ({
         ...s,

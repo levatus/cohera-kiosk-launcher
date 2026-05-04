@@ -29,8 +29,6 @@ const EMR_URL =
  */
 const EXIT_PIN = process.env.EXPO_PUBLIC_KIOSK_EXIT_PIN ?? "1561";
 
-const AUTO_LOCK_DELAY_MS = 2 * 60 * 1000;
-
 export default function KioskScreen() {
   useKeepAwake();
 
@@ -39,7 +37,6 @@ export default function KioskScreen() {
   const buildInfo = useBuildInfo();
 
   const webViewRef = useRef<WebView>(null);
-  const autoLockTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [canGoBack, setCanGoBack] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -79,15 +76,6 @@ export default function KioskScreen() {
     return () => sub.remove();
   }, [canGoBack]);
 
-  // Clean up auto-lock timer on unmount
-  useEffect(() => {
-    return () => {
-      if (autoLockTimer.current) {
-        clearTimeout(autoLockTimer.current);
-      }
-    };
-  }, []);
-
   const onNavigationStateChange = useCallback(
     (navState: WebViewNavigation) => {
       setCanGoBack(navState.canGoBack);
@@ -113,10 +101,6 @@ export default function KioskScreen() {
 
   // Re-engage lock-task mode and update state
   const lockKiosk = useCallback(async () => {
-    if (autoLockTimer.current) {
-      clearTimeout(autoLockTimer.current);
-      autoLockTimer.current = null;
-    }
     await startLock();
     NavigationBar.setVisibilityAsync("hidden").catch(() => {});
     NavigationBar.setBehaviorAsync("overlay-swipe").catch(() => {});
@@ -147,11 +131,7 @@ export default function KioskScreen() {
     NavigationBar.setVisibilityAsync("visible").catch(() => {});
     NavigationBar.setBehaviorAsync("inset-swipe").catch(() => {});
     setIsKioskLocked(false);
-    // Auto-lock after 2 minutes of unlocked use
-    autoLockTimer.current = setTimeout(() => {
-      lockKiosk();
-    }, AUTO_LOCK_DELAY_MS);
-  }, [lockKiosk]);
+  }, []);
 
   const handleOpenSchedule = useCallback(() => {
     setAdminVisible(false);
@@ -274,7 +254,7 @@ export default function KioskScreen() {
         <View style={styles.updateOverlay} pointerEvents="box-only">
           <Text style={styles.updateIcon}>📦</Text>
           <Text style={styles.updateTitle}>
-            {updateProgress >= 1 ? "Installing…" : "Downloading Update"}
+            {updateProgress >= 1 ? "Ready to Install" : "Downloading Update"}
           </Text>
           <Text style={styles.updateBuild}>
             {latestBuild > 0 ? `Build ${latestBuild}` : "Downloading…"}
