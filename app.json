@@ -27,7 +27,7 @@
     },
     "android": {
       "package": "com.clinic.kioskbrowser",
-      "versionCode": 5,
+      "versionCode": 6,
       "softwareKeyboardLayoutMode": "resize",
       "allowBackup": false
     },

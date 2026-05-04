@@ -21,6 +21,16 @@ const { LockTaskModule } = NativeModules as {
   LockTaskModule: LockTaskNativeModule | undefined;
 };
 
+/**
+ * True only when the running APK includes the native PackageInstaller method
+ * (introduced in build 5). On older APKs the method exists on the TS type
+ * but is absent from the native bridge — calling it would throw at runtime.
+ */
+export const hasNativeInstallApk =
+  Platform.OS === "android" &&
+  typeof (NativeModules.LockTaskModule as Record<string, unknown> | undefined)
+    ?.installApk === "function";
+
 export async function startLock(): Promise<void> {
   if (Platform.OS !== "android" || !LockTaskModule) return;
   try {

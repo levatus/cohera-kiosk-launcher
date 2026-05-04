@@ -32,6 +32,14 @@ import com.facebook.react.bridge.ReactMethod
 class LockTaskModule(reactContext: ReactApplicationContext) :
     ReactContextBaseJavaModule(reactContext) {
 
+    companion object {
+        /** Tracks whether kiosk lock is intentionally active.
+         *  MainActivity.onResume() checks this before re-engaging startLockTask()
+         *  so that a stopLock()-triggered resume cycle does not immediately
+         *  re-lock the task. */
+        var kioskEnabled = true
+    }
+
     override fun getName(): String = "LockTaskModule"
 
     /**
@@ -56,6 +64,7 @@ class LockTaskModule(reactContext: ReactApplicationContext) :
 
     @ReactMethod
     fun startLock(promise: Promise) {
+        kioskEnabled = true
         val activity = reactApplicationContext.currentActivity
         if (activity == null) {
             promise.reject("NO_ACTIVITY", "No current Activity")
@@ -74,6 +83,7 @@ class LockTaskModule(reactContext: ReactApplicationContext) :
 
     @ReactMethod
     fun stopLock(promise: Promise) {
+        kioskEnabled = false
         val activity = reactApplicationContext.currentActivity
         if (activity == null) {
             promise.reject("NO_ACTIVITY", "No current Activity")
@@ -193,12 +203,13 @@ function patchMainActivity(config) {
   return withMainActivity(config, (config) => {
     let contents = config.modResults.contents;
 
-    if (contents.includes("startLockTask()")) return config;
+    // Already patched with the guarded version — nothing to do.
+    if (contents.includes("LockTaskModule.kioskEnabled")) return config;
 
-    const onResumeBlock = `
+    const guardedOnResumeBlock = `
   override fun onResume() {
     super.onResume()
-    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP && LockTaskModule.kioskEnabled) {
       try {
         val dpm = getSystemService(android.content.Context.DEVICE_POLICY_SERVICE) as android.app.admin.DevicePolicyManager
         val admin = android.content.ComponentName(this, KioskDeviceAdminReceiver::class.java)
@@ -210,11 +221,23 @@ function patchMainActivity(config) {
     }
   }`;
 
+    // If the old unguarded block is already present, upgrade it in-place by
+    // replacing the bare SDK version check with the kioskEnabled-guarded one.
+    // This handles existing prebuilt android/ trees generated before this fix.
+    if (contents.includes("startLockTask()")) {
+      config.modResults.contents = contents.replace(
+        /if \(android\.os\.Build\.VERSION\.SDK_INT >= android\.os\.Build\.VERSION_CODES\.LOLLIPOP\) \{/,
+        "if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP && LockTaskModule.kioskEnabled) {"
+      );
+      return config;
+    }
+
+    // Fresh inject — no onResume block exists at all yet.
     const classBodyEnd = contents.lastIndexOf("}");
     if (classBodyEnd === -1) return config;
 
     config.modResults.contents =
-      contents.slice(0, classBodyEnd) + onResumeBlock + "\n" + contents.slice(classBodyEnd);
+      contents.slice(0, classBodyEnd) + guardedOnResumeBlock + "\n" + contents.slice(classBodyEnd);
 
     return config;
   });

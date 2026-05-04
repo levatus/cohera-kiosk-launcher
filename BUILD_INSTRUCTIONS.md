@@ -1,6 +1,45 @@
 # Build Instructions — Kiosk Launcher APK
 
-## Prerequisites (one-time, on your local machine)
+> **AGENT NOTE: Never run `eas build` unless the user explicitly asks for a new build in this conversation turn. Pushing code changes, editing `app.json`, or updating any kiosk file does NOT require triggering a build. EAS builds consume paid Expo build minutes and must only be initiated on direct user request.**
+
+## Recommended: GitHub Actions (cloud build — no local toolchain needed)
+
+This is the easiest way to build the APK. Everything runs in the cloud — no need to install anything on your machine.
+
+### One-time setup
+
+1. **Create an Expo access token**
+   - Go to [expo.dev](https://expo.dev) and sign in
+   - Navigate to **Account Settings → Access Tokens** (URL: `https://expo.dev/accounts/[your-account]/settings/access-tokens`)
+   - Click **Create Token**, give it a name (e.g. `github-actions`), and copy the token value
+
+2. **Add the token as a GitHub secret**
+   - In your GitHub repository, go to **Settings → Secrets and variables → Actions**
+   - Click **New repository secret**
+   - Name: `EXPO_TOKEN`
+   - Value: paste the token you copied above
+   - Click **Add secret**
+
+That's the only manual step — you only need to do this once.
+
+---
+
+### Triggering a build
+
+1. Go to your GitHub repository → **Actions** tab
+2. Select **Build Kiosk APK** from the left sidebar
+3. Click **Run workflow** → **Run workflow**
+4. Wait approximately 10–15 minutes for the build to complete
+5. When the workflow finishes, open the completed run and expand the **Print build link** step
+6. Follow the link to the Expo dashboard to download the APK
+
+---
+
+## Alternative: Local build
+
+If you prefer to build on your own machine:
+
+### Prerequisites (one-time)
 
 1. **Node.js** — download from https://nodejs.org (LTS version)
 2. **pnpm** — open a terminal and run:
@@ -13,32 +52,17 @@
    ```
 4. **Expo account** — sign up free at https://expo.dev
 
----
+### Build steps
 
-## Build steps
-
-### 1. Download the project code
-Clone the standalone repository to your machine:
 ```bash
-git clone https://github.com/levatus/cohera-kiosk-launcher.git
-cd cohera-kiosk-launcher
-```
-
-Or click **Code → Download ZIP** on the GitHub page and unzip it.
-
-### 2. Install dependencies
-```bash
+# 1. Install dependencies (from the repo root)
 pnpm install
-```
 
-### 3. Log in to Expo
-```bash
+# 2. Log in to Expo
 eas login
-```
-Enter your Expo account email and password when prompted.
 
-### 4. Run the build
-```bash
+# 3. Run the build (from the kiosk-launcher directory)
+cd artifacts/kiosk-launcher
 eas build --platform android --profile production
 ```
 
@@ -93,14 +117,15 @@ The MDM will push the app silently to all enrolled tablets.
 
 ---
 
-## Rebuilding in future
+## When to rebuild
 
-You only need to rebuild the APK if you change something baked in
-(PIN, EMR URL, or a native kiosk feature). For those cases:
+> **AGENT NOTE: This section describes when *the user* should manually trigger a build. It is not a checklist for the agent. Do not run `eas build` as a side effect of any code change — only if the user explicitly requests it.**
+
+You only need to rebuild the APK if you change something baked in at build time (PIN, EMR URL, or a native kiosk feature). When that happens, **you** (the user) should:
 
 1. Update `eas.json` with the new values
 2. Bump `versionCode` in `app.json` by 1
-3. Run `eas build --platform android --profile production` again
+3. Trigger a new build yourself — either via the GitHub Actions workflow (see above) or by running `eas build --platform android --profile production` locally
 4. Upload the new APK to your MDM — it will push to all tablets automatically
 
 Regular changes to the EMR web app are reflected on tablets instantly

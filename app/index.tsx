@@ -158,13 +158,6 @@ export default function KioskScreen() {
     setScheduleVisible(true);
   }, []);
 
-  const handleSignOut = useCallback(() => {
-    setAdminVisible(false);
-    webViewRef.current?.injectJavaScript(
-      "if(window.__KIOSK_SIGN_OUT__){window.__KIOSK_SIGN_OUT__();}true;"
-    );
-  }, []);
-
   const handleAdminDismiss = useCallback(() => setAdminVisible(false), []);
 
   // Schedule modal
@@ -181,18 +174,36 @@ export default function KioskScreen() {
     []
   );
 
+  // Injected *before* content loads so __KIOSK_MODE__ is always present when
+  // React mounts in the WebView. __KIOSK_BUILD__ is omitted here when buildInfo
+  // hasn't resolved yet — it is pushed in via injectJavaScript() below instead.
+  const injectedJsBeforeLoad = buildInfo != null
+    ? `(function(){window.__KIOSK_MODE__=true;window.__KIOSK_BUILD__=${JSON.stringify(buildInfo)};})();true;`
+    : `(function(){window.__KIOSK_MODE__=true;})();true;`;
+
+  // Injected *after* load for anything that requires the DOM to exist first.
   const injectedJs = `
     (function() {
       document.addEventListener('contextmenu', function(e) { e.preventDefault(); }, true);
-      window.__KIOSK_MODE__ = true;
-      window.__KIOSK_BUILD__ = ${JSON.stringify(buildInfo ?? {})};
     })();
     true;
   `;
 
-  if (Platform.OS === "web") {
-    return (
-      <View style={styles.container}>
+  // Once buildInfo resolves from AsyncStorage, push it into the live WebView
+  // so the login page polling can pick it up even if the page was already loaded.
+  useEffect(() => {
+    if (buildInfo == null) return;
+    webViewRef.current?.injectJavaScript(
+      `window.__KIOSK_BUILD__=${JSON.stringify(buildInfo)};true;`
+    );
+  }, [buildInfo]);
+
+  return (
+    <View style={styles.container}>
+      <StatusBar hidden />
+
+      {/* Web platform: show a placeholder instead of the WebView (WebView is Android-only) */}
+      {Platform.OS === "web" ? (
         <View style={styles.webPlaceholder}>
           <Text style={styles.webPlaceholderText}>Kiosk Launcher</Text>
           <Text style={styles.webPlaceholderSub}>
@@ -201,16 +212,8 @@ export default function KioskScreen() {
           </Text>
           <Text style={styles.webPlaceholderUrl}>{EMR_URL}</Text>
         </View>
-      </View>
-    );
-  }
-
-  return (
-    <View style={styles.container}>
-      <StatusBar hidden />
-
-      {/* Checking splash — shown instead of the WebView while the launch update check runs */}
-      {isChecking ? (
+      ) : /* Checking splash — shown instead of the WebView while the launch update check runs */
+      isChecking ? (
         <View style={styles.checkingOverlay}>
           <Text style={styles.checkingIcon}>🏥</Text>
           <Text style={styles.checkingTitle}>Cohera Kiosk</Text>
@@ -234,6 +237,7 @@ export default function KioskScreen() {
           mixedContentMode="always"
           allowsFullscreenVideo
           onNavigationStateChange={onNavigationStateChange}
+          injectedJavaScriptBeforeContentLoaded={injectedJsBeforeLoad}
           injectedJavaScript={injectedJs}
           onShouldStartLoadWithRequest={() => true}
           setSupportMultipleWindows={false}
@@ -317,7 +321,6 @@ export default function KioskScreen() {
         onSchedule={handleOpenSchedule}
         onDismiss={handleAdminDismiss}
         onCheckForUpdates={checkNow}
-        onSignOut={handleSignOut}
       />
 
       <ScheduleModal

@@ -28,6 +28,8 @@ EXPO_PUBLIC_KIOSK_EXIT_PIN=9876
 
 ### Build command
 
+> **AGENT NOTE: This command is for the user to run manually. Never run `eas build` as part of implementation work or in response to code changes — only run it if the user explicitly requests a build in this conversation turn.**
+
 ```bash
 cd artifacts/kiosk-launcher
 eas build --platform android --profile production
