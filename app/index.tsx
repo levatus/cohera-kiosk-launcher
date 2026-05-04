@@ -2,7 +2,7 @@ import { useKeepAwake } from "expo-keep-awake";
 import { StatusBar } from "expo-status-bar";
 import React, { useCallback, useRef, useState } from "react";
 import {
-  Animated,
+  DimensionValue,
   Platform,
   Pressable,
   StyleSheet,
@@ -30,7 +30,13 @@ export default function KioskScreen() {
     onRefresh: handleScheduledRefresh,
   });
 
-  const { phase, progress, error: updateError } = useAppUpdate();
+  const {
+    updateAvailable,
+    downloading,
+    progress,
+    error: updateError,
+    phase,
+  } = useAppUpdate();
 
   const handleWebViewError = useCallback(() => {
     setHasError(true);
@@ -53,8 +59,7 @@ export default function KioskScreen() {
     true;
   `;
 
-  const isUpdating =
-    phase === "downloading" || phase === "installing";
+  const isUpdating = updateAvailable;
 
   return (
     <View style={styles.container}>
@@ -136,7 +141,7 @@ export default function KioskScreen() {
                   <View
                     style={[
                       styles.progressFill,
-                      { width: `${progress}%` as unknown as number },
+                      { width: `${progress}%` as DimensionValue },
                     ]}
                   />
                 </View>
@@ -146,7 +151,7 @@ export default function KioskScreen() {
 
             {phase === "installing" && (
               <View style={styles.progressTrack}>
-                <View style={[styles.progressFill, { width: "100%" as unknown as number }]} />
+                <View style={[styles.progressFill, { width: "100%" as DimensionValue }]} />
               </View>
             )}
           </View>

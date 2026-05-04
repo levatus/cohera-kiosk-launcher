@@ -39,9 +39,11 @@ export type UpdatePhase =
   | "error";
 
 export interface AppUpdateState {
-  phase: UpdatePhase;
+  updateAvailable: boolean;
+  downloading: boolean;
   progress: number;
   error: string | null;
+  phase: UpdatePhase;
 }
 
 export function useAppUpdate(): AppUpdateState {
@@ -160,5 +162,11 @@ export function useAppUpdate(): AppUpdateState {
     return () => clearTimeout(timer);
   }, []);
 
-  return { phase, progress, error };
+  return {
+    updateAvailable: phase === "downloading" || phase === "installing",
+    downloading: phase === "downloading",
+    progress,
+    error,
+    phase,
+  };
 }
