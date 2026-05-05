@@ -82,7 +82,13 @@ export default function KioskScreen() {
 
   const handleSignOut = useCallback(() => {
     setShowMenu(false);
-    webViewRef.current?.reload();
+    webViewRef.current?.injectJavaScript(`
+      (function() {
+        fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
+          .finally(function() { window.location.href = '/'; });
+      })();
+      true;
+    `);
   }, []);
 
   const handleOpenSchedule = useCallback(() => {
