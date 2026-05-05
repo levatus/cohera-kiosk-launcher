@@ -56,7 +56,7 @@ class LockTaskModule(reactContext: ReactApplicationContext) :
 
     @ReactMethod
     fun startLock(promise: Promise) {
-        val activity = currentActivity
+        val activity = reactApplicationContext.currentActivity
         if (activity == null) {
             promise.reject("NO_ACTIVITY", "No current Activity")
             return
@@ -75,7 +75,7 @@ class LockTaskModule(reactContext: ReactApplicationContext) :
 
     @ReactMethod
     fun stopLock(promise: Promise) {
-        val activity = currentActivity
+        val activity = reactApplicationContext.currentActivity
         if (activity == null) {
             promise.reject("NO_ACTIVITY", "No current Activity")
             return
