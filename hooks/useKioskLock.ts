@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { startLock, stopLock } from "@/modules/LockTask";
 
-const RELOCK_SECONDS = 10;
+const RELOCK_SECONDS = 90;
 
 export function useKioskLock() {
   const [isLocked, setIsLocked] = useState(true);

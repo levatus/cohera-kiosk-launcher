@@ -196,7 +196,7 @@ export default function KioskScreen() {
         </View>
       )}
 
-      {/* Lock button — lower left corner */}
+      {/* Lock button — upper right corner */}
       <View style={styles.lockCorner}>
         <Pressable
           style={[
@@ -353,10 +353,10 @@ const styles = StyleSheet.create({
   },
   lockCorner: {
     position: "absolute",
-    bottom: 20,
-    left: 16,
+    top: 20,
+    right: 16,
     zIndex: 50,
-    alignItems: "flex-start",
+    alignItems: "flex-end",
     gap: 6,
   },
   lockButton: {
