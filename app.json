@@ -36,6 +36,8 @@
       ],
       "expo-font",
       "./plugins/withKioskAndroid",
+      "./plugins/withDeviceAdmin",
+      "./plugins/withLockTask",
       "./plugins/withScreenControl"
     ],
     "experiments": {

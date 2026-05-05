@@ -1,24 +1,14 @@
-import { useCallback, useEffect, useState } from "react";
-import { Platform } from "react-native";
-import * as NavigationBar from "expo-navigation-bar";
+import { useCallback, useState } from "react";
+import { startLock, stopLock } from "@/modules/LockTask";
 
 export function useKioskLock() {
   const [isLocked, setIsLocked] = useState(false);
 
-  useEffect(() => {
-    if (Platform.OS === "android") {
-      NavigationBar.setVisibilityAsync("visible");
-    }
-  }, []);
-
   const toggle = useCallback(async () => {
-    if (Platform.OS === "android") {
-      if (!isLocked) {
-        await NavigationBar.setVisibilityAsync("hidden");
-        await NavigationBar.setBehaviorAsync("overlay-swipe");
-      } else {
-        await NavigationBar.setVisibilityAsync("visible");
-      }
+    if (!isLocked) {
+      await startLock();
+    } else {
+      await stopLock();
     }
     setIsLocked((prev) => !prev);
   }, [isLocked]);
