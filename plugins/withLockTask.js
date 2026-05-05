@@ -3,8 +3,8 @@
  *
  * During `expo prebuild` this plugin:
  *  1. Writes LockTaskModule.kt and LockTaskPackage.kt into the Android source tree.
- *  2. Patches MainActivity.kt to call startLockTask() in onResume() so the
- *     device is pinned immediately on launch (requires Device Owner setup via ADB).
+ *  2. Patches MainActivity.kt to call startLockTask() in onResume() only when
+ *     LockTaskModule.kioskEnabled is true (set by JS startLock/stopLock).
  *  3. Patches MainApplication.kt to register LockTaskPackage so JS can call
  *     NativeModules.LockTaskModule.startLock() / stopLock().
  */
@@ -34,11 +34,11 @@ class LockTaskModule(reactContext: ReactApplicationContext) :
 
     override fun getName(): String = "LockTaskModule"
 
-    /**
-     * If this app is the Device Owner, whitelist itself for lock-task mode.
-     * This suppresses the Android "unpin" prompt entirely — the user cannot
-     * exit via Back+Overview or any system gesture.
-     */
+    companion object {
+        /** Checked by MainActivity.onResume() before re-engaging lock task. */
+        @Volatile var kioskEnabled: Boolean = true
+    }
+
     private fun whitelistSelf() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) return
         try {
@@ -56,12 +56,13 @@ class LockTaskModule(reactContext: ReactApplicationContext) :
 
     @ReactMethod
     fun startLock(promise: Promise) {
-        val activity = reactApplicationContext.currentActivity
+        val activity = currentActivity
         if (activity == null) {
             promise.reject("NO_ACTIVITY", "No current Activity")
             return
         }
         try {
+            kioskEnabled = true
             whitelistSelf()
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 activity.startLockTask()
@@ -74,12 +75,13 @@ class LockTaskModule(reactContext: ReactApplicationContext) :
 
     @ReactMethod
     fun stopLock(promise: Promise) {
-        val activity = reactApplicationContext.currentActivity
+        val activity = currentActivity
         if (activity == null) {
             promise.reject("NO_ACTIVITY", "No current Activity")
             return
         }
         try {
+            kioskEnabled = false
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 activity.stopLockTask()
             }
@@ -143,12 +145,20 @@ function patchMainActivity(config) {
   return withMainActivity(config, (config) => {
     let contents = config.modResults.contents;
 
-    if (contents.includes("startLockTask()")) return config;
+    if (contents.includes("LockTaskModule.kioskEnabled")) return config;
+
+    // Remove any old unconditional startLockTask() onResume if present
+    if (contents.includes("startLockTask()")) {
+      contents = contents.replace(
+        /\s*override fun onResume\(\)[^}]*startLockTask\(\)[^}]*\}[^\n]*/s,
+        ""
+      );
+    }
 
     const onResumeBlock = `
   override fun onResume() {
     super.onResume()
-    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP && LockTaskModule.kioskEnabled) {
       try {
         val dpm = getSystemService(android.content.Context.DEVICE_POLICY_SERVICE) as android.app.admin.DevicePolicyManager
         val admin = android.content.ComponentName(this, KioskDeviceAdminReceiver::class.java)
