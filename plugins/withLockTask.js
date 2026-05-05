@@ -61,15 +61,17 @@ class LockTaskModule(reactContext: ReactApplicationContext) :
             promise.reject("NO_ACTIVITY", "No current Activity")
             return
         }
-        try {
-            kioskEnabled = true
-            whitelistSelf()
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                activity.startLockTask()
+        kioskEnabled = true
+        whitelistSelf()
+        activity.runOnUiThread {
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    activity.startLockTask()
+                }
+                promise.resolve(null)
+            } catch (e: Exception) {
+                promise.reject("START_LOCK_TASK_FAILED", e.message, e)
             }
-            promise.resolve(null)
-        } catch (e: Exception) {
-            promise.reject("START_LOCK_TASK_FAILED", e.message, e)
         }
     }
 
@@ -80,14 +82,16 @@ class LockTaskModule(reactContext: ReactApplicationContext) :
             promise.reject("NO_ACTIVITY", "No current Activity")
             return
         }
-        try {
-            kioskEnabled = false
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                activity.stopLockTask()
+        kioskEnabled = false
+        activity.runOnUiThread {
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    activity.stopLockTask()
+                }
+                promise.resolve(null)
+            } catch (e: Exception) {
+                promise.reject("STOP_LOCK_TASK_FAILED", e.message, e)
             }
-            promise.resolve(null)
-        } catch (e: Exception) {
-            promise.reject("STOP_LOCK_TASK_FAILED", e.message, e)
         }
     }
 }
