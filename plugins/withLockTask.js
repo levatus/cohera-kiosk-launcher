@@ -50,7 +50,10 @@ class LockTaskModule(reactContext: ReactApplicationContext) :
                 KioskDeviceAdminReceiver::class.java
             )
             if (dpm.isDeviceOwnerApp(reactApplicationContext.packageName)) {
-                dpm.setLockTaskPackages(admin, arrayOf(reactApplicationContext.packageName))
+                dpm.setLockTaskPackages(
+                    admin,
+                    arrayOf(reactApplicationContext.packageName, "com.locktest.app")
+                )
             }
         } catch (_: Exception) {}
     }
