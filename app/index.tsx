@@ -11,7 +11,6 @@ import {
   View,
 } from "react-native";
 import { WebView } from "react-native-webview";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useScreenSchedule } from "@/hooks/useScreenSchedule";
 import { useAppUpdate } from "@/hooks/useAppUpdate";
 import { useKioskLock } from "@/hooks/useKioskLock";
@@ -24,7 +23,7 @@ export default function KioskScreen() {
 
   const webViewRef = useRef<WebView>(null);
   const [hasError, setHasError] = useState(false);
-  const { isLocked, toggle: toggleLock } = useKioskLock();
+  const { isLocked, lastError, toggle: toggleLock } = useKioskLock();
 
   const handleScheduledRefresh = useCallback(() => {
     webViewRef.current?.reload();
@@ -163,19 +162,18 @@ export default function KioskScreen() {
         </View>
       )}
 
-      <Pressable
-        style={styles.lockButton}
-        onPress={toggleLock}
-        hitSlop={12}
-      >
-        <MaterialCommunityIcons
-          name={isLocked ? "lock" : "lock-open-outline"}
-          size={20}
-          color="rgba(255,255,255,0.9)"
-        />
-      </Pressable>
-
-      {/* Update check errors are intentionally silent — the WebView continues normally */}
+      <View style={styles.lockCorner}>
+        <Pressable
+          style={[styles.lockButton, isLocked ? styles.lockButtonLocked : styles.lockButtonUnlocked]}
+          onPress={toggleLock}
+          android_ripple={{ color: "rgba(255,255,255,0.15)", borderless: true, radius: 36 }}
+        >
+          <Text style={styles.lockButtonText}>{isLocked ? "Lock" : "Unlock"}</Text>
+        </Pressable>
+        {lastError ? (
+          <Text style={styles.lockError} numberOfLines={2}>{lastError}</Text>
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -306,15 +304,47 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
-  lockButton: {
+  lockCorner: {
     position: "absolute",
-    bottom: 24,
+    bottom: 20,
     left: 16,
-    backgroundColor: "rgba(0,0,0,0.45)",
-    borderRadius: 20,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
     zIndex: 50,
+    alignItems: "flex-start",
+    gap: 6,
+  },
+  lockButton: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    elevation: 8,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+  },
+  lockButtonLocked: {
+    backgroundColor: "#1a0d0d",
+    borderColor: "#f87171",
+    shadowColor: "#f87171",
+  },
+  lockButtonUnlocked: {
+    backgroundColor: "#0d1a0d",
+    borderColor: "#4ade80",
+    shadowColor: "#4ade80",
+  },
+  lockButtonText: {
+    color: "#ffffff",
+    fontSize: 13,
+    fontWeight: "700" as const,
+    letterSpacing: 0.5,
+  },
+  lockError: {
+    color: "#f87171",
+    fontSize: 10,
+    maxWidth: 120,
+    lineHeight: 13,
   },
 
   webPlaceholder: {

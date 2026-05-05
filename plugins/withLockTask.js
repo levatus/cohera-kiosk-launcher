@@ -205,17 +205,48 @@ function patchMainApplication(config) {
     const packageName =
       config.android?.package ?? "com.clinic.kioskbrowser";
 
-    if (contents.includes("LockTaskPackage")) return config;
+    if (contents.includes("LockTaskPackage")) {
+      console.log("[withLockTask] LockTaskPackage already present, skipping patch");
+      return config;
+    }
 
-    contents = contents.replace(
-      /import com\.facebook\.react\.ReactApplication/,
-      `import com.facebook.react.ReactApplication\nimport ${packageName}.LockTaskPackage`
-    );
+    // Add import
+    const importLine = `import ${packageName}.LockTaskPackage`;
+    if (!contents.includes(importLine)) {
+      if (contents.includes("import com.facebook.react.ReactApplication")) {
+        contents = contents.replace(
+          /import com\.facebook\.react\.ReactApplication/,
+          `import com.facebook.react.ReactApplication\n${importLine}`
+        );
+        console.log("[withLockTask] Added LockTaskPackage import (ReactApplication anchor)");
+      } else {
+        contents = contents.replace(
+          /^(package .+\n)/,
+          `$1${importLine}\n`
+        );
+        console.log("[withLockTask] Added LockTaskPackage import (package anchor fallback)");
+      }
+    }
 
-    contents = contents.replace(
-      /(val packages = PackageList\(this\)\.packages)/,
-      `$1\n      packages.add(LockTaskPackage())`
-    );
+    // Patch 1 — Expo SDK 52+ / RN 0.76+ format:
+    //   PackageList(this).packages.apply { ... }
+    if (contents.includes("PackageList(this).packages.apply")) {
+      contents = contents.replace(
+        /(PackageList\(this\)\.packages\.apply \{)/,
+        `$1\n              add(LockTaskPackage())`
+      );
+      console.log("[withLockTask] Patched MainApplication via .apply {} (SDK 52+ format)");
+    } else if (contents.includes("PackageList(this).packages")) {
+      // Patch 2 — Older format:
+      //   val packages = PackageList(this).packages
+      contents = contents.replace(
+        /(val packages = PackageList\(this\)\.packages)/,
+        `$1\n      packages.add(LockTaskPackage())`
+      );
+      console.log("[withLockTask] Patched MainApplication via val packages (older format)");
+    } else {
+      console.error("[withLockTask] ERROR: Could not find PackageList in MainApplication.kt — LockTaskPackage will NOT be registered");
+    }
 
     config.modResults.contents = contents;
     return config;
