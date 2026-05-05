@@ -1,3 +1,4 @@
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import Constants from "expo-constants";
 import { useKeepAwake } from "expo-keep-awake";
 import { StatusBar } from "expo-status-bar";
@@ -11,9 +12,13 @@ import {
   View,
 } from "react-native";
 import { WebView } from "react-native-webview";
-import { useScreenSchedule } from "@/hooks/useScreenSchedule";
+
+import { AdminMenu } from "@/components/AdminMenu";
+import { PinModal } from "@/components/PinModal";
+import { ScheduleModal } from "@/components/ScheduleModal";
 import { useAppUpdate } from "@/hooks/useAppUpdate";
 import { useKioskLock } from "@/hooks/useKioskLock";
+import { useScreenSchedule } from "@/hooks/useScreenSchedule";
 
 const EMR_URL =
   process.env.EXPO_PUBLIC_EMR_URL ?? "https://health-record-hub-slinuw.replit.app";
@@ -23,34 +28,56 @@ export default function KioskScreen() {
 
   const webViewRef = useRef<WebView>(null);
   const [hasError, setHasError] = useState(false);
-  const { isLocked, lastError, toggle: toggleLock } = useKioskLock();
+
+  const { isLocked, lastError, lock, unlock } = useKioskLock();
+
+  const [showPin, setShowPin] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+  const [showSchedule, setShowSchedule] = useState(false);
 
   const handleScheduledRefresh = useCallback(() => {
     webViewRef.current?.reload();
   }, []);
 
-  const { screenOn } = useScreenSchedule({
+  const { schedule, screenOn, saveSchedule } = useScreenSchedule({
     onRefresh: handleScheduledRefresh,
   });
 
-  const {
-    updateAvailable,
-    downloading,
-    progress,
-    phase,
-  } = useAppUpdate();
+  const { updateAvailable, downloading, progress, phase } = useAppUpdate();
 
-  const handleWebViewError = useCallback(() => {
-    setHasError(true);
-  }, []);
-
-  const handleWebViewLoad = useCallback(() => {
-    setHasError(false);
-  }, []);
-
+  const handleWebViewError = useCallback(() => setHasError(true), []);
+  const handleWebViewLoad = useCallback(() => setHasError(false), []);
   const handleRetry = useCallback(() => {
     setHasError(false);
     webViewRef.current?.reload();
+  }, []);
+
+  const handleLockButtonPress = useCallback(() => {
+    if (isLocked) {
+      setShowPin(true);
+    } else {
+      lock();
+    }
+  }, [isLocked, lock]);
+
+  const handlePinSuccess = useCallback(() => {
+    setShowPin(false);
+    setShowMenu(true);
+  }, []);
+
+  const handleUnlock = useCallback(async () => {
+    setShowMenu(false);
+    await unlock();
+  }, [unlock]);
+
+  const handleSignOut = useCallback(() => {
+    setShowMenu(false);
+    webViewRef.current?.reload();
+  }, []);
+
+  const handleOpenSchedule = useCallback(() => {
+    setShowMenu(false);
+    setTimeout(() => setShowSchedule(true), 200);
   }, []);
 
   const versionCode = Constants.expoConfig?.android?.versionCode ?? null;
@@ -126,33 +153,24 @@ export default function KioskScreen() {
             <View style={styles.updateLogo}>
               <Text style={styles.updateLogoText}>cohera</Text>
             </View>
-
             <Text style={styles.updateTitle}>
-              {phase === "installing"
-                ? "Installing update…"
-                : "Update downloading…"}
+              {phase === "installing" ? "Installing update…" : "Update downloading…"}
             </Text>
-
             <Text style={styles.updateSub}>
               {phase === "installing"
                 ? "Follow the on-screen prompt to complete the installation."
-                : `Please keep the app open. The kiosk will restart automatically.`}
+                : "Please keep the app open. The kiosk will restart automatically."}
             </Text>
-
             {downloading && (
               <>
                 <View style={styles.progressTrack}>
                   <View
-                    style={[
-                      styles.progressFill,
-                      { width: `${progress}%` as DimensionValue },
-                    ]}
+                    style={[styles.progressFill, { width: `${progress}%` as DimensionValue }]}
                   />
                 </View>
                 <Text style={styles.progressLabel}>{progress}%</Text>
               </>
             )}
-
             {phase === "installing" && (
               <View style={styles.progressTrack}>
                 <View style={[styles.progressFill, { width: "100%" as DimensionValue }]} />
@@ -162,18 +180,47 @@ export default function KioskScreen() {
         </View>
       )}
 
+      {/* Lock button — lower left corner */}
       <View style={styles.lockCorner}>
         <Pressable
-          style={[styles.lockButton, isLocked ? styles.lockButtonLocked : styles.lockButtonUnlocked]}
-          onPress={toggleLock}
+          style={[
+            styles.lockButton,
+            isLocked ? styles.lockButtonLocked : styles.lockButtonUnlocked,
+          ]}
+          onPress={handleLockButtonPress}
           android_ripple={{ color: "rgba(255,255,255,0.15)", borderless: true, radius: 36 }}
         >
-          <Text style={styles.lockButtonText}>{isLocked ? "Lock" : "Unlock"}</Text>
+          <MaterialCommunityIcons
+            name={isLocked ? "lock" : "lock-open-variant"}
+            size={28}
+            color="#ffffff"
+          />
         </Pressable>
         {lastError ? (
           <Text style={styles.lockError} numberOfLines={2}>{lastError}</Text>
         ) : null}
       </View>
+
+      <PinModal
+        visible={showPin}
+        onSuccess={handlePinSuccess}
+        onDismiss={() => setShowPin(false)}
+      />
+
+      <AdminMenu
+        visible={showMenu}
+        onUnlock={handleUnlock}
+        onSignOut={handleSignOut}
+        onSchedule={handleOpenSchedule}
+        onDismiss={() => setShowMenu(false)}
+      />
+
+      <ScheduleModal
+        visible={showSchedule}
+        schedule={schedule}
+        onSave={saveSchedule}
+        onDismiss={() => setShowSchedule(false)}
+      />
     </View>
   );
 }
@@ -229,7 +276,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#000",
     zIndex: 10,
   },
-
   updateOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "#0a1628",
@@ -286,24 +332,6 @@ const styles = StyleSheet.create({
     fontWeight: "600" as const,
     marginTop: 4,
   },
-
-  updateErrorBanner: {
-    position: "absolute",
-    bottom: 24,
-    left: 24,
-    right: 24,
-    backgroundColor: "rgba(220,60,60,0.85)",
-    borderRadius: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    zIndex: 30,
-  },
-  updateErrorText: {
-    color: "#fff",
-    fontSize: 12,
-    textAlign: "center",
-  },
-
   lockCorner: {
     position: "absolute",
     bottom: 20,
@@ -334,19 +362,12 @@ const styles = StyleSheet.create({
     borderColor: "#4ade80",
     shadowColor: "#4ade80",
   },
-  lockButtonText: {
-    color: "#ffffff",
-    fontSize: 13,
-    fontWeight: "700" as const,
-    letterSpacing: 0.5,
-  },
   lockError: {
     color: "#f87171",
     fontSize: 10,
     maxWidth: 120,
     lineHeight: 13,
   },
-
   webPlaceholder: {
     flex: 1,
     alignItems: "center",
