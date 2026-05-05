@@ -2,8 +2,9 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import Constants from "expo-constants";
 import { useKeepAwake } from "expo-keep-awake";
 import { StatusBar } from "expo-status-bar";
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
+  BackHandler,
   DimensionValue,
   Platform,
   Pressable,
@@ -34,6 +35,15 @@ export default function KioskScreen() {
   const [showPin, setShowPin] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
+
+  useEffect(() => {
+    if (!isLocked) return;
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+      webViewRef.current?.goBack();
+      return true;
+    });
+    return () => sub.remove();
+  }, [isLocked]);
 
   const handleScheduledRefresh = useCallback(() => {
     webViewRef.current?.reload();
@@ -117,7 +127,7 @@ export default function KioskScreen() {
           mediaPlaybackRequiresUserAction={false}
           mixedContentMode="always"
           allowsFullscreenVideo
-          injectedJavaScript={injectedJs}
+          injectedJavaScriptBeforeContentLoaded={injectedJs}
           onShouldStartLoadWithRequest={() => true}
           setSupportMultipleWindows={false}
           startInLoadingState

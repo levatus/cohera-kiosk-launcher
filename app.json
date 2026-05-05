@@ -4,7 +4,7 @@
     "slug": "kiosk-launcher",
     "owner": "slinuw",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "landscape",
     "icon": "./assets/images/icon.png",
     "scheme": "kiosk-launcher",
     "userInterfaceStyle": "light",
@@ -20,6 +20,7 @@
     "android": {
       "package": "com.clinic.kioskbrowser",
       "versionCode": 7,
+      "screenOrientation": "landscape",
       "softwareKeyboardLayoutMode": "resize",
       "allowBackup": false,
       "permissions": ["android.permission.REQUEST_INSTALL_PACKAGES"]
