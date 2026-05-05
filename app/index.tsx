@@ -30,7 +30,7 @@ export default function KioskScreen() {
   const webViewRef = useRef<WebView>(null);
   const [hasError, setHasError] = useState(false);
 
-  const { isLocked, lastError, lock, unlock } = useKioskLock();
+  const { isLocked, lastError, relockSecondsLeft, lock, unlock } = useKioskLock();
 
   const [showPin, setShowPin] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
@@ -215,6 +215,9 @@ export default function KioskScreen() {
         {lastError ? (
           <Text style={styles.lockError} numberOfLines={2}>{lastError}</Text>
         ) : null}
+        {relockSecondsLeft !== null ? (
+          <Text style={styles.relockCountdown}>Relocking in {relockSecondsLeft}s…</Text>
+        ) : null}
       </View>
 
       <PinModal
@@ -380,6 +383,12 @@ const styles = StyleSheet.create({
   },
   lockError: {
     color: "#f87171",
+    fontSize: 10,
+    maxWidth: 120,
+    lineHeight: 13,
+  },
+  relockCountdown: {
+    color: "rgba(255,255,255,0.55)",
     fontSize: 10,
     maxWidth: 120,
     lineHeight: 13,
