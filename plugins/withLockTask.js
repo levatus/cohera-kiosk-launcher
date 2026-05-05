@@ -24,6 +24,7 @@ import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
 import android.os.Build
+import android.util.Log
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
@@ -63,13 +64,16 @@ class LockTaskModule(reactContext: ReactApplicationContext) :
         }
         kioskEnabled = true
         whitelistSelf()
+        Log.d("KioskLock", "startLock: dispatching to UI thread")
         activity.runOnUiThread {
             try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                     activity.startLockTask()
+                    Log.d("KioskLock", "startLock: startLockTask() succeeded")
                 }
                 promise.resolve(null)
             } catch (e: Exception) {
+                Log.e("KioskLock", "startLock: startLockTask() threw: \${e.message}", e)
                 promise.reject("START_LOCK_TASK_FAILED", e.message, e)
             }
         }
@@ -79,17 +83,21 @@ class LockTaskModule(reactContext: ReactApplicationContext) :
     fun stopLock(promise: Promise) {
         val activity = reactApplicationContext.currentActivity
         if (activity == null) {
+            Log.e("KioskLock", "stopLock: currentActivity is null")
             promise.reject("NO_ACTIVITY", "No current Activity")
             return
         }
         kioskEnabled = false
+        Log.d("KioskLock", "stopLock: kioskEnabled=false, dispatching to UI thread")
         activity.runOnUiThread {
             try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                     activity.stopLockTask()
+                    Log.d("KioskLock", "stopLock: stopLockTask() succeeded")
                 }
                 promise.resolve(null)
             } catch (e: Exception) {
+                Log.e("KioskLock", "stopLock: stopLockTask() threw: \${e.message}", e)
                 promise.reject("STOP_LOCK_TASK_FAILED", e.message, e)
             }
         }
@@ -162,6 +170,7 @@ function patchMainActivity(config) {
     const onResumeBlock = `
   override fun onResume() {
     super.onResume()
+    android.util.Log.d("KioskLock", "onResume: kioskEnabled=\${LockTaskModule.kioskEnabled}")
     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP && LockTaskModule.kioskEnabled) {
       try {
         val dpm = getSystemService(android.content.Context.DEVICE_POLICY_SERVICE) as android.app.admin.DevicePolicyManager
@@ -170,7 +179,10 @@ function patchMainActivity(config) {
           dpm.setLockTaskPackages(admin, arrayOf(packageName))
         }
         startLockTask()
-      } catch (e: Exception) { /* no-op if not device owner */ }
+        android.util.Log.d("KioskLock", "onResume: startLockTask() called")
+      } catch (e: Exception) {
+        android.util.Log.e("KioskLock", "onResume: startLockTask() threw: \${e.message}")
+      }
     }
   }`;
 
