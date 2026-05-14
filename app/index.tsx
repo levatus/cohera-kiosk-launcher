@@ -4,8 +4,10 @@ import { useKeepAwake } from "expo-keep-awake";
 import { StatusBar } from "expo-status-bar";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
+  Animated,
   BackHandler,
   DimensionValue,
+  PanResponder,
   Platform,
   Pressable,
   StyleSheet,
@@ -59,6 +61,46 @@ export default function KioskScreen() {
   });
 
   const { updateAvailable, downloading, progress, phase } = useAppUpdate();
+
+  // Pull-to-refresh: drag down from the top edge to hard-reload the WebView.
+  const PULL_THRESHOLD = 90;
+  const MAX_PULL = 130;
+  const pullAnim = useRef(new Animated.Value(0)).current;
+  const isRefreshingRef = useRef(false);
+
+  const triggerRefresh = useCallback(() => {
+    if (isRefreshingRef.current) return;
+    isRefreshingRef.current = true;
+    Animated.timing(pullAnim, { toValue: MAX_PULL, duration: 80, useNativeDriver: true }).start();
+    webViewRef.current?.reload();
+    setTimeout(() => {
+      Animated.spring(pullAnim, { toValue: 0, useNativeDriver: true }).start(() => {
+        isRefreshingRef.current = false;
+      });
+    }, 900);
+  }, [pullAnim]);
+
+  const pullPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, g) => g.dy > 6 && g.vy > 0,
+      onPanResponderMove: (_, g) => {
+        if (g.dy > 0) {
+          pullAnim.setValue(Math.min(g.dy, MAX_PULL));
+        }
+      },
+      onPanResponderRelease: (_, g) => {
+        if (g.dy >= PULL_THRESHOLD) {
+          triggerRefresh();
+        } else {
+          Animated.spring(pullAnim, { toValue: 0, useNativeDriver: true }).start();
+        }
+      },
+      onPanResponderTerminate: () => {
+        Animated.spring(pullAnim, { toValue: 0, useNativeDriver: true }).start();
+      },
+    })
+  ).current;
 
   const handleWebViewError = useCallback(() => setHasError(true), []);
   const handleWebViewLoad = useCallback(() => setHasError(false), []);
@@ -211,6 +253,23 @@ export default function KioskScreen() {
           </View>
         </View>
       )}
+
+      {/* Pull-to-refresh: thin invisible strip at very top intercepts downward drags */}
+      <View
+        style={styles.pullZone}
+        {...pullPanResponder.panHandlers}
+        pointerEvents="box-only"
+      />
+      {/* Animated pull indicator slides down from top edge */}
+      <Animated.View
+        style={[
+          styles.pullIndicator,
+          { transform: [{ translateY: Animated.subtract(pullAnim, new Animated.Value(56)) }] },
+        ]}
+        pointerEvents="none"
+      >
+        <MaterialCommunityIcons name="refresh" size={22} color="#fff" />
+      </Animated.View>
 
       {/* Lock button — upper right corner */}
       <View style={styles.lockCorner}>
@@ -408,6 +467,32 @@ const styles = StyleSheet.create({
     fontSize: 10,
     maxWidth: 120,
     lineHeight: 13,
+  },
+  pullZone: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 48,
+    zIndex: 98,
+    backgroundColor: "transparent",
+  },
+  pullIndicator: {
+    position: "absolute",
+    top: 0,
+    alignSelf: "center",
+    zIndex: 97,
+    backgroundColor: "rgba(74,158,255,0.85)",
+    borderRadius: 20,
+    width: 40,
+    height: 40,
+    alignItems: "center",
+    justifyContent: "center",
+    elevation: 6,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
   },
   webPlaceholder: {
     flex: 1,
