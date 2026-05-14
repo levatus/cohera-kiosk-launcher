@@ -6,6 +6,7 @@ interface Props {
   visible: boolean;
   onUnlock: () => void;
   onSignOut: () => void;
+  onRefresh: () => void;
   onSchedule: () => void;
   onDismiss: () => void;
 }
@@ -52,6 +53,7 @@ export function AdminMenu({
   visible,
   onUnlock,
   onSignOut,
+  onRefresh,
   onSchedule,
   onDismiss,
 }: Props) {
@@ -81,6 +83,13 @@ export function AdminMenu({
               sublabel="Reload and clear session"
               onPress={onSignOut}
               danger
+            />
+            <View style={styles.divider} />
+            <MenuItem
+              icon="refresh"
+              label="Refresh Page"
+              sublabel="Reload without signing out"
+              onPress={onRefresh}
             />
             <View style={styles.divider} />
             <MenuItem

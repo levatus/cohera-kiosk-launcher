@@ -4,6 +4,7 @@ import { useKeepAwake } from "expo-keep-awake";
 import { StatusBar } from "expo-status-bar";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Animated,
   BackHandler,
   DimensionValue,
@@ -20,6 +21,7 @@ import { AdminMenu } from "@/components/AdminMenu";
 import { PinModal } from "@/components/PinModal";
 import { ScheduleModal } from "@/components/ScheduleModal";
 import { useAppUpdate } from "@/hooks/useAppUpdate";
+import { useConnectionStatus } from "@/hooks/useConnectionStatus";
 import { useKioskLock } from "@/hooks/useKioskLock";
 import { setKeepScreenOn } from "@/modules/ScreenControl";
 import { useScreenSchedule } from "@/hooks/useScreenSchedule";
@@ -61,6 +63,7 @@ export default function KioskScreen() {
   });
 
   const { updateAvailable, downloading, progress, phase } = useAppUpdate();
+  const connectionStatus = useConnectionStatus(EMR_URL);
 
   // Pull-to-refresh: drag down from the top edge to hard-reload the WebView.
   const PULL_THRESHOLD = 90;
@@ -138,6 +141,11 @@ export default function KioskScreen() {
     `);
   }, []);
 
+  const handleRefresh = useCallback(() => {
+    setShowMenu(false);
+    webViewRef.current?.reload();
+  }, []);
+
   const handleOpenSchedule = useCallback(() => {
     setShowMenu(false);
     setTimeout(() => setShowSchedule(true), 200);
@@ -185,6 +193,11 @@ export default function KioskScreen() {
           onShouldStartLoadWithRequest={() => true}
           setSupportMultipleWindows={false}
           startInLoadingState
+          renderLoading={() => (
+            <View style={styles.webviewLoading}>
+              <ActivityIndicator size="large" color="#4a9eff" />
+            </View>
+          )}
           geolocationEnabled={false}
           androidLayerType="hardware"
           onLoad={handleWebViewLoad}
@@ -273,20 +286,32 @@ export default function KioskScreen() {
 
       {/* Lock button — upper right corner */}
       <View style={styles.lockCorner}>
-        <Pressable
-          style={[
-            styles.lockButton,
-            isLocked ? styles.lockButtonLocked : styles.lockButtonUnlocked,
-          ]}
-          onPress={handleLockButtonPress}
-          android_ripple={{ color: "rgba(255,255,255,0.15)", borderless: true, radius: 36 }}
-        >
-          <MaterialCommunityIcons
-            name={isLocked ? "lock" : "lock-open-variant"}
-            size={28}
-            color="#ffffff"
+        <View style={styles.lockButtonRow}>
+          <View
+            style={[
+              styles.connectionDot,
+              connectionStatus === "online"
+                ? styles.connectionDotOnline
+                : connectionStatus === "degraded"
+                ? styles.connectionDotDegraded
+                : styles.connectionDotOffline,
+            ]}
           />
-        </Pressable>
+          <Pressable
+            style={[
+              styles.lockButton,
+              isLocked ? styles.lockButtonLocked : styles.lockButtonUnlocked,
+            ]}
+            onPress={handleLockButtonPress}
+            android_ripple={{ color: "rgba(255,255,255,0.15)", borderless: true, radius: 36 }}
+          >
+            <MaterialCommunityIcons
+              name={isLocked ? "lock" : "lock-open-variant"}
+              size={28}
+              color="#ffffff"
+            />
+          </Pressable>
+        </View>
         {lastError ? (
           <Text style={styles.lockError} numberOfLines={2}>{lastError}</Text>
         ) : null}
@@ -305,6 +330,7 @@ export default function KioskScreen() {
         visible={showMenu}
         onUnlock={handleUnlock}
         onSignOut={handleSignOut}
+        onRefresh={handleRefresh}
         onSchedule={handleOpenSchedule}
         onDismiss={() => setShowMenu(false)}
       />
@@ -327,6 +353,12 @@ const styles = StyleSheet.create({
   },
   webview: {
     flex: 1,
+  },
+  webviewLoading: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "#0a1628",
+    alignItems: "center",
+    justifyContent: "center",
   },
   errorOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -433,6 +465,27 @@ const styles = StyleSheet.create({
     zIndex: 50,
     alignItems: "flex-end",
     gap: 6,
+  },
+  lockButtonRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  connectionDot: {
+    width: 11,
+    height: 11,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: "rgba(0,0,0,0.25)",
+  },
+  connectionDotOnline: {
+    backgroundColor: "#4ade80",
+  },
+  connectionDotDegraded: {
+    backgroundColor: "#fbbf24",
+  },
+  connectionDotOffline: {
+    backgroundColor: "#f87171",
   },
   lockButton: {
     width: 72,
