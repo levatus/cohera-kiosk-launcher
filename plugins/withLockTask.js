@@ -105,6 +105,44 @@ class LockTaskModule(reactContext: ReactApplicationContext) :
             }
         }
     }
+
+    /**
+     * Stops lock task mode and terminates the app process cleanly.
+     * Uses finishAndRemoveTask() to remove the activity from the recents
+     * stack, then kills the process so the OS fully reclaims it.
+     * Safe to call after the admin PIN has already been verified.
+     */
+    @ReactMethod
+    fun closeApp(promise: Promise) {
+        val activity = reactApplicationContext.currentActivity
+        if (activity == null) {
+            Log.e("KioskLock", "closeApp: currentActivity is null")
+            promise.reject("NO_ACTIVITY", "No current Activity")
+            return
+        }
+        kioskEnabled = false
+        Log.d("KioskLock", "closeApp: dispatching to UI thread")
+        activity.runOnUiThread {
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    activity.stopLockTask()
+                    Log.d("KioskLock", "closeApp: stopLockTask() succeeded")
+                }
+                // finishAndRemoveTask() removes the task from the recents list
+                // and finishes all activities in it — reliable on all API levels.
+                activity.finishAndRemoveTask()
+                // Kill the process after a short delay so the promise resolves
+                // before the JS bridge disappears.
+                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                    android.os.Process.killProcess(android.os.Process.myPid())
+                }, 300)
+                promise.resolve(null)
+            } catch (e: Exception) {
+                Log.e("KioskLock", "closeApp: threw: \${e.message}", e)
+                promise.reject("CLOSE_APP_FAILED", e.message, e)
+            }
+        }
+    }
 }
 `;
 

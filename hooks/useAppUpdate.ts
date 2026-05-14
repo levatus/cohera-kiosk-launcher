@@ -23,7 +23,7 @@
 import Constants from "expo-constants";
 import * as FileSystem from "expo-file-system/legacy";
 import * as IntentLauncher from "expo-intent-launcher";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Platform } from "react-native";
 
 const GITHUB_REPO = "levatus/cohera-kiosk-launcher";
@@ -55,6 +55,14 @@ export interface AppUpdateState {
   currentBuildCreatedAt: string;
   /** No-op: download starts automatically when an update is detected. */
   startUpdate: () => void;
+  /**
+   * Manually trigger the same update check that runs automatically on mount.
+   * Safe to call at any time; ignored while a check/download/install is
+   * already in progress.
+   */
+  checkForUpdates: () => void;
+  /** True while a manual or automatic release check is in flight. */
+  checking: boolean;
 }
 
 export function useAppUpdate(): AppUpdateState {
@@ -73,111 +81,126 @@ export function useAppUpdate(): AppUpdateState {
     };
   }, []);
 
+  const download = useCallback(async () => {
+    const apkUrl = apkUrlRef.current;
+    if (!apkUrl || !mountedRef.current) return;
+
+    setPhase("downloading");
+    setProgress(0);
+
+    const dest = (FileSystem.cacheDirectory ?? "") + "kiosk-update.apk";
+
+    try {
+      await FileSystem.deleteAsync(dest, { idempotent: true });
+
+      const downloadResumable = FileSystem.createDownloadResumable(
+        apkUrl,
+        dest,
+        {},
+        ({ totalBytesWritten, totalBytesExpectedToWrite }) => {
+          if (totalBytesExpectedToWrite > 0 && mountedRef.current) {
+            setProgress(
+              Math.round(
+                (totalBytesWritten / totalBytesExpectedToWrite) * 100
+              )
+            );
+          }
+        }
+      );
+
+      const result = await downloadResumable.downloadAsync();
+      if (!result?.uri) throw new Error("Download returned no URI");
+
+      if (!mountedRef.current) return;
+      setPhase("installing");
+
+      const contentUri = await FileSystem.getContentUriAsync(result.uri);
+
+      await IntentLauncher.startActivityAsync(
+        "android.intent.action.VIEW",
+        {
+          data: contentUri,
+          flags: 1,
+          type: "application/vnd.android.package-archive",
+        }
+      );
+    } catch (err) {
+      if (mountedRef.current) {
+        setError(err instanceof Error ? err.message : String(err));
+        setPhase("error");
+      }
+    }
+  }, []);
+
+  const runCheck = useCallback(async () => {
+    if (!mountedRef.current) return;
+    setPhase("checking");
+    setError(null);
+
+    try {
+      const res = await fetch(RELEASES_URL, {
+        headers: { Accept: "application/vnd.github.v3+json" },
+      });
+      if (!res.ok) throw new Error(`GitHub API returned ${res.status}`);
+
+      const data = await res.json();
+
+      const tag: string = data.tag_name ?? "";
+      const remoteN = parseInt(tag.replace("build-", ""), 10);
+      if (isNaN(remoteN)) throw new Error(`Unexpected tag: "${tag}"`);
+
+      const publishedAt: string | null = data.published_at ?? null;
+      if (publishedAt && mountedRef.current) {
+        setLatestBuildCreatedAt(publishedAt);
+      }
+
+      const localN: number =
+        Constants.expoConfig?.android?.versionCode ?? 0;
+
+      const apkAsset = (data.assets ?? []).find(
+        (a: { name: string; browser_download_url: string }) =>
+          a.name.endsWith(".apk")
+      );
+      if (!apkAsset) throw new Error("No APK asset found in release");
+
+      apkUrlRef.current = apkAsset.browser_download_url as string;
+
+      if (!mountedRef.current) return;
+
+      if (remoteN <= localN) {
+        setPhase("no-update");
+        return;
+      }
+
+      await download();
+    } catch (err) {
+      if (mountedRef.current) {
+        setError(err instanceof Error ? err.message : String(err));
+        setPhase("error");
+      }
+    }
+  }, [download]);
+
+  // Automatic check on mount after a short delay.
   useEffect(() => {
     if (Platform.OS !== "android") return;
 
-    const run = async () => {
-      if (!mountedRef.current) return;
-      setPhase("checking");
-
-      try {
-        const res = await fetch(RELEASES_URL, {
-          headers: { Accept: "application/vnd.github.v3+json" },
-        });
-        if (!res.ok) throw new Error(`GitHub API returned ${res.status}`);
-
-        const data = await res.json();
-
-        const tag: string = data.tag_name ?? "";
-        const remoteN = parseInt(tag.replace("build-", ""), 10);
-        if (isNaN(remoteN)) throw new Error(`Unexpected tag: "${tag}"`);
-
-        const publishedAt: string | null = data.published_at ?? null;
-        if (publishedAt && mountedRef.current) {
-          setLatestBuildCreatedAt(publishedAt);
-        }
-
-        const localN: number =
-          Constants.expoConfig?.android?.versionCode ?? 0;
-
-        const apkAsset = (data.assets ?? []).find(
-          (a: { name: string; browser_download_url: string }) =>
-            a.name.endsWith(".apk")
-        );
-        if (!apkAsset) throw new Error("No APK asset found in release");
-
-        apkUrlRef.current = apkAsset.browser_download_url as string;
-
-        if (!mountedRef.current) return;
-
-        if (remoteN <= localN) {
-          setPhase("no-update");
-          return;
-        }
-
-        await download();
-      } catch (err) {
-        if (mountedRef.current) {
-          setError(err instanceof Error ? err.message : String(err));
-          setPhase("error");
-        }
-      }
-    };
-
-    const download = async () => {
-      const apkUrl = apkUrlRef.current;
-      if (!apkUrl || !mountedRef.current) return;
-
-      setPhase("downloading");
-      setProgress(0);
-
-      const dest = (FileSystem.cacheDirectory ?? "") + "kiosk-update.apk";
-
-      try {
-        await FileSystem.deleteAsync(dest, { idempotent: true });
-
-        const downloadResumable = FileSystem.createDownloadResumable(
-          apkUrl,
-          dest,
-          {},
-          ({ totalBytesWritten, totalBytesExpectedToWrite }) => {
-            if (totalBytesExpectedToWrite > 0 && mountedRef.current) {
-              setProgress(
-                Math.round(
-                  (totalBytesWritten / totalBytesExpectedToWrite) * 100
-                )
-              );
-            }
-          }
-        );
-
-        const result = await downloadResumable.downloadAsync();
-        if (!result?.uri) throw new Error("Download returned no URI");
-
-        if (!mountedRef.current) return;
-        setPhase("installing");
-
-        const contentUri = await FileSystem.getContentUriAsync(result.uri);
-
-        await IntentLauncher.startActivityAsync(
-          "android.intent.action.VIEW",
-          {
-            data: contentUri,
-            flags: 1,
-            type: "application/vnd.android.package-archive",
-          }
-        );
-      } catch (err) {
-        if (mountedRef.current) {
-          setError(err instanceof Error ? err.message : String(err));
-          setPhase("error");
-        }
-      }
-    };
-
-    const timer = setTimeout(run, CHECK_DELAY_MS);
+    const timer = setTimeout(runCheck, CHECK_DELAY_MS);
     return () => clearTimeout(timer);
-  }, []);
+  }, [runCheck]);
+
+  const checkForUpdates = useCallback(() => {
+    if (Platform.OS !== "android") return;
+    // Don't interrupt an ongoing download or install.
+    if (
+      phase === "downloading" ||
+      phase === "installing" ||
+      phase === "checking"
+    ) {
+      return;
+    }
+    runCheck();
+  }, [phase, runCheck]);
 
   const currentBuildCreatedAt: string =
     (Constants.expoConfig?.extra as { buildTimestamp?: string } | undefined)
@@ -194,5 +217,7 @@ export function useAppUpdate(): AppUpdateState {
     startUpdate: () => {
       // Download begins automatically when an update is detected; this is a no-op.
     },
+    checkForUpdates,
+    checking: phase === "checking",
   };
 }

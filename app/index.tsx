@@ -25,6 +25,7 @@ import { useConnectionStatus } from "@/hooks/useConnectionStatus";
 import { useKioskLock } from "@/hooks/useKioskLock";
 import { setKeepScreenOn } from "@/modules/ScreenControl";
 import { useScreenSchedule } from "@/hooks/useScreenSchedule";
+import { closeApp } from "@/modules/LockTask";
 
 const EMR_URL =
   process.env.EXPO_PUBLIC_EMR_URL ?? "https://health-record-hub-slinuw.replit.app";
@@ -62,7 +63,8 @@ export default function KioskScreen() {
     onRefresh: handleScheduledRefresh,
   });
 
-  const { updateAvailable, downloading, progress, phase } = useAppUpdate();
+  const { updateAvailable, downloading, progress, phase, checkForUpdates, checking } = useAppUpdate();
+  const [upToDate, setUpToDate] = useState(false);
   const connectionStatus = useConnectionStatus(EMR_URL);
 
   // Pull-to-refresh: drag down from the top edge to hard-reload the WebView.
@@ -141,14 +143,39 @@ export default function KioskScreen() {
     `);
   }, []);
 
-  const handleRefresh = useCallback(() => {
-    setShowMenu(false);
-    webViewRef.current?.reload();
-  }, []);
-
   const handleOpenSchedule = useCallback(() => {
     setShowMenu(false);
     setTimeout(() => setShowSchedule(true), 200);
+  }, []);
+
+  const upToDateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const manualCheckPendingRef = useRef(false);
+
+  const handleCheckForUpdates = useCallback(() => {
+    setUpToDate(false);
+    if (upToDateTimerRef.current) clearTimeout(upToDateTimerRef.current);
+    manualCheckPendingRef.current = true;
+    checkForUpdates();
+  }, [checkForUpdates]);
+
+  // Show "Up to date" only when a user-initiated check comes back with no update.
+  useEffect(() => {
+    if (phase === "no-update" && manualCheckPendingRef.current) {
+      manualCheckPendingRef.current = false;
+      setUpToDate(true);
+      upToDateTimerRef.current = setTimeout(() => setUpToDate(false), 3000);
+    } else if (phase !== "checking" && phase !== "no-update") {
+      // Any other phase transition (error, downloading, etc.) clears the flag.
+      manualCheckPendingRef.current = false;
+    }
+    return () => {
+      if (upToDateTimerRef.current) clearTimeout(upToDateTimerRef.current);
+    };
+  }, [phase]);
+
+  const handleCloseApp = useCallback(async () => {
+    setShowMenu(false);
+    await closeApp();
   }, []);
 
   const versionCode = Constants.expoConfig?.android?.versionCode ?? null;
@@ -298,6 +325,13 @@ export default function KioskScreen() {
             ]}
           />
           <Pressable
+            style={styles.refreshButton}
+            onPress={triggerRefresh}
+            android_ripple={{ color: "rgba(255,255,255,0.15)", borderless: true, radius: 36 }}
+          >
+            <MaterialCommunityIcons name="refresh" size={28} color="#ffffff" />
+          </Pressable>
+          <Pressable
             style={[
               styles.lockButton,
               isLocked ? styles.lockButtonLocked : styles.lockButtonUnlocked,
@@ -330,9 +364,12 @@ export default function KioskScreen() {
         visible={showMenu}
         onUnlock={handleUnlock}
         onSignOut={handleSignOut}
-        onRefresh={handleRefresh}
         onSchedule={handleOpenSchedule}
+        onCheckForUpdates={handleCheckForUpdates}
+        onCloseApp={handleCloseApp}
         onDismiss={() => setShowMenu(false)}
+        checking={checking}
+        upToDate={upToDate}
       />
 
       <ScheduleModal
@@ -486,6 +523,21 @@ const styles = StyleSheet.create({
   },
   connectionDotOffline: {
     backgroundColor: "#f87171",
+  },
+  refreshButton: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: "rgba(255,255,255,0.2)",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    elevation: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
   },
   lockButton: {
     width: 72,

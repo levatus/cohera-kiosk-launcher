@@ -1,14 +1,19 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import React from "react";
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 
 interface Props {
   visible: boolean;
   onUnlock: () => void;
   onSignOut: () => void;
-  onRefresh: () => void;
   onSchedule: () => void;
+  onCheckForUpdates: () => void;
+  onCloseApp: () => void;
   onDismiss: () => void;
+  /** True while a GitHub release check is in flight. */
+  checking?: boolean;
+  /** Shown briefly after a check completes with no new version. */
+  upToDate?: boolean;
 }
 
 interface MenuItemProps {
@@ -17,13 +22,15 @@ interface MenuItemProps {
   sublabel?: string;
   onPress: () => void;
   danger?: boolean;
+  disabled?: boolean;
+  rightElement?: React.ReactNode;
 }
 
-function MenuItem({ icon, label, sublabel, onPress, danger }: MenuItemProps) {
+function MenuItem({ icon, label, sublabel, onPress, danger, disabled, rightElement }: MenuItemProps) {
   return (
     <Pressable
-      style={({ pressed }) => [styles.item, pressed && styles.itemPressed]}
-      onPress={onPress}
+      style={({ pressed }) => [styles.item, pressed && !disabled && styles.itemPressed, disabled && styles.itemDisabled]}
+      onPress={disabled ? undefined : onPress}
     >
       <View style={[styles.iconWrap, danger && styles.iconWrapDanger]}>
         <MaterialCommunityIcons
@@ -40,11 +47,13 @@ function MenuItem({ icon, label, sublabel, onPress, danger }: MenuItemProps) {
           <Text style={styles.itemSublabel}>{sublabel}</Text>
         ) : null}
       </View>
-      <MaterialCommunityIcons
-        name="chevron-right"
-        size={18}
-        color="rgba(255,255,255,0.2)"
-      />
+      {rightElement ?? (
+        <MaterialCommunityIcons
+          name="chevron-right"
+          size={18}
+          color="rgba(255,255,255,0.2)"
+        />
+      )}
     </Pressable>
   );
 }
@@ -53,9 +62,12 @@ export function AdminMenu({
   visible,
   onUnlock,
   onSignOut,
-  onRefresh,
   onSchedule,
+  onCheckForUpdates,
+  onCloseApp,
   onDismiss,
+  checking = false,
+  upToDate = false,
 }: Props) {
   return (
     <Modal
@@ -86,17 +98,35 @@ export function AdminMenu({
             />
             <View style={styles.divider} />
             <MenuItem
-              icon="refresh"
-              label="Refresh Page"
-              sublabel="Reload without signing out"
-              onPress={onRefresh}
-            />
-            <View style={styles.divider} />
-            <MenuItem
               icon="calendar-clock"
               label="Screen Schedule"
               sublabel="Display hours & daily refresh"
               onPress={onSchedule}
+            />
+            <View style={styles.divider} />
+            <MenuItem
+              icon="download-circle-outline"
+              label={checking ? "Checking…" : upToDate ? "Up to date" : "Check for Updates"}
+              sublabel="Compare against latest GitHub release"
+              onPress={onCheckForUpdates}
+              disabled={checking}
+              rightElement={
+                checking ? (
+                  <ActivityIndicator size="small" color="#4a9eff" />
+                ) : upToDate ? (
+                  <MaterialCommunityIcons name="check-circle-outline" size={18} color="#4ade80" />
+                ) : (
+                  <MaterialCommunityIcons name="chevron-right" size={18} color="rgba(255,255,255,0.2)" />
+                )
+              }
+            />
+            <View style={styles.divider} />
+            <MenuItem
+              icon="power"
+              label="Close App"
+              sublabel="Stop kiosk mode and exit"
+              onPress={onCloseApp}
+              danger
             />
           </View>
 
@@ -146,6 +176,9 @@ const styles = StyleSheet.create({
   },
   itemPressed: {
     backgroundColor: "rgba(255,255,255,0.07)",
+  },
+  itemDisabled: {
+    opacity: 0.6,
   },
   iconWrap: {
     width: 40,
