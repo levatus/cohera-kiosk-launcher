@@ -1,11 +1,14 @@
 /**
  * Config plugin that writes a ScreenControlModule native Android module.
  *
- * The module exposes two methods to JS:
- *   wakeScreen()  — turns the display on (FULL_WAKE_LOCK + ACQUIRE_CAUSES_WAKEUP,
- *                   or Activity.setTurnScreenOn on API 27+)
- *   lockScreen()  — turns the display off via DevicePolicyManager.lockNow()
- *                   (requires Device Owner / Device Admin; rejects otherwise)
+ * The module exposes three methods to JS:
+ *   wakeScreen()       — turns the display on (FULL_WAKE_LOCK + ACQUIRE_CAUSES_WAKEUP,
+ *                        or Activity.setTurnScreenOn on API 27+)
+ *   lockScreen()       — turns the display off via DevicePolicyManager.lockNow()
+ *                        (requires Device Owner / Device Admin; rejects otherwise)
+ *   setKeepScreenOn()  — adds/clears FLAG_KEEP_SCREEN_ON on the Activity window so
+ *                        Android cannot dim or sleep the display while the app is
+ *                        foregrounded, regardless of device battery/timeout settings.
  *
  * JS fall-back: if lockScreen() rejects (not Device Admin), the app shows
  * a full-screen black overlay instead so the visual effect is still achieved.
@@ -26,6 +29,7 @@ import android.app.admin.DevicePolicyManager
 import android.content.Context
 import android.os.Build
 import android.os.PowerManager
+import android.view.WindowManager
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
@@ -80,6 +84,27 @@ class ScreenControlModule(reactContext: ReactApplicationContext) :
             promise.reject("NOT_DEVICE_ADMIN", "Device admin required to lock screen", e)
         } catch (e: Exception) {
             promise.reject("LOCK_FAILED", e.message, e)
+        }
+    }
+
+    @ReactMethod
+    fun setKeepScreenOn(enabled: Boolean, promise: Promise) {
+        val activity = reactApplicationContext.currentActivity
+        if (activity == null) {
+            promise.reject("NO_ACTIVITY", "No current Activity")
+            return
+        }
+        try {
+            activity.runOnUiThread {
+                if (enabled) {
+                    activity.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                } else {
+                    activity.window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                }
+            }
+            promise.resolve(null)
+        } catch (e: Exception) {
+            promise.reject("KEEP_SCREEN_ON_FAILED", e.message, e)
         }
     }
 }

@@ -19,11 +19,14 @@
     },
     "android": {
       "package": "com.clinic.kioskbrowser",
-      "versionCode": 7,
+      "versionCode": 8,
       "screenOrientation": "landscape",
       "softwareKeyboardLayoutMode": "resize",
       "allowBackup": false,
-      "permissions": ["android.permission.REQUEST_INSTALL_PACKAGES"]
+      "permissions": [
+        "android.permission.REQUEST_INSTALL_PACKAGES",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "favicon": "./assets/images/icon.png"
@@ -43,6 +46,9 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "buildTimestamp": ""
     }
   }
 }

@@ -44,6 +44,15 @@ export interface AppUpdateState {
   progress: number;
   error: string | null;
   phase: UpdatePhase;
+  /** ISO timestamp of when the latest GitHub Release was published (i.e. when the remote APK was built). */
+  latestBuildCreatedAt: string | null;
+  /**
+   * ISO timestamp of when the currently-installed build was compiled.
+   * Sourced from Constants.expoConfig?.extra?.buildTimestamp, which the CI
+   * workflow (build-kiosk-apk.yml) should patch into app.json before each
+   * EAS build. Empty string when running a local/dev build.
+   */
+  currentBuildCreatedAt: string;
   /** No-op: download starts automatically when an update is detected. */
   startUpdate: () => void;
 }
@@ -52,6 +61,7 @@ export function useAppUpdate(): AppUpdateState {
   const [phase, setPhase] = useState<UpdatePhase>("idle");
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [latestBuildCreatedAt, setLatestBuildCreatedAt] = useState<string | null>(null);
 
   const mountedRef = useRef(true);
   const apkUrlRef = useRef<string | null>(null);
@@ -81,6 +91,11 @@ export function useAppUpdate(): AppUpdateState {
         const tag: string = data.tag_name ?? "";
         const remoteN = parseInt(tag.replace("build-", ""), 10);
         if (isNaN(remoteN)) throw new Error(`Unexpected tag: "${tag}"`);
+
+        const publishedAt: string | null = data.published_at ?? null;
+        if (publishedAt && mountedRef.current) {
+          setLatestBuildCreatedAt(publishedAt);
+        }
 
         const localN: number =
           Constants.expoConfig?.android?.versionCode ?? 0;
@@ -164,12 +179,18 @@ export function useAppUpdate(): AppUpdateState {
     return () => clearTimeout(timer);
   }, []);
 
+  const currentBuildCreatedAt: string =
+    (Constants.expoConfig?.extra as { buildTimestamp?: string } | undefined)
+      ?.buildTimestamp ?? "";
+
   return {
     updateAvailable: phase === "downloading" || phase === "installing",
     downloading: phase === "downloading",
     progress,
     error,
     phase,
+    latestBuildCreatedAt,
+    currentBuildCreatedAt,
     startUpdate: () => {
       // Download begins automatically when an update is detected; this is a no-op.
     },

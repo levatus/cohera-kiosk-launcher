@@ -19,6 +19,7 @@ import { PinModal } from "@/components/PinModal";
 import { ScheduleModal } from "@/components/ScheduleModal";
 import { useAppUpdate } from "@/hooks/useAppUpdate";
 import { useKioskLock } from "@/hooks/useKioskLock";
+import { setKeepScreenOn } from "@/modules/ScreenControl";
 import { useScreenSchedule } from "@/hooks/useScreenSchedule";
 
 const EMR_URL =
@@ -26,6 +27,10 @@ const EMR_URL =
 
 export default function KioskScreen() {
   useKeepAwake();
+
+  useEffect(() => {
+    setKeepScreenOn(true).catch(() => {});
+  }, []);
 
   const webViewRef = useRef<WebView>(null);
   const [hasError, setHasError] = useState(false);
@@ -97,10 +102,11 @@ export default function KioskScreen() {
   }, []);
 
   const versionCode = Constants.expoConfig?.android?.versionCode ?? null;
+  const buildTimestamp: string = (Constants.expoConfig?.extra as { buildTimestamp?: string } | undefined)?.buildTimestamp ?? "";
   const injectedJs = `
     (function() {
       window.__KIOSK_MODE__ = true;
-      window.__KIOSK_BUILD__ = ${JSON.stringify({ build: versionCode })};
+      window.__KIOSK_BUILD__ = ${JSON.stringify({ build: versionCode, buildTimestamp })};
       document.addEventListener('contextmenu', function(e) { e.preventDefault(); }, true);
     })();
     true;
@@ -142,6 +148,16 @@ export default function KioskScreen() {
           onLoad={handleWebViewLoad}
           onError={handleWebViewError}
           onHttpError={handleWebViewError}
+          onPermissionRequest={(request) => {
+            const audioResources = request.resources.filter(
+              (r) => r === "android.webkit.resource.AUDIO_CAPTURE"
+            );
+            if (audioResources.length > 0) {
+              request.grant(audioResources);
+            } else {
+              request.deny();
+            }
+          }}
         />
       )}
 

@@ -1,12 +1,15 @@
 /**
  * Thin wrapper around the native ScreenControlModule.
  *
- * wakeScreen() — turns the display on (wake lock / setTurnScreenOn)
- * lockScreen() — turns the display off (DevicePolicyManager.lockNow)
- *               Resolves on success; rejects with code "NOT_DEVICE_ADMIN"
- *               if the app does not have Device Owner / Admin rights.
+ * wakeScreen()        — turns the display on (wake lock / setTurnScreenOn)
+ * lockScreen()        — turns the display off (DevicePolicyManager.lockNow)
+ *                       Resolves on success; rejects with code "NOT_DEVICE_ADMIN"
+ *                       if the app does not have Device Owner / Admin rights.
+ * setKeepScreenOn()   — sets/clears FLAG_KEEP_SCREEN_ON on the Activity window
+ *                       so Android cannot dim or sleep the display while the app
+ *                       is in the foreground.
  *
- * Both are no-ops on platforms other than Android.
+ * All are no-ops on platforms other than Android.
  */
 
 import { NativeModules, Platform } from "react-native";
@@ -25,4 +28,15 @@ export async function wakeScreen(): Promise<void> {
 export async function lockScreen(): Promise<void> {
   if (Platform.OS !== "android" || !ScreenControlModule) return;
   return ScreenControlModule.lockScreen();
+}
+
+/**
+ * Sets or clears the Android FLAG_KEEP_SCREEN_ON window flag on the current
+ * Activity. When enabled, Android cannot turn the display off while the app
+ * is foregrounded, regardless of device battery or display-timeout settings.
+ * No-op on non-Android platforms.
+ */
+export async function setKeepScreenOn(enabled: boolean): Promise<void> {
+  if (Platform.OS !== "android" || !ScreenControlModule) return;
+  return ScreenControlModule.setKeepScreenOn(enabled);
 }

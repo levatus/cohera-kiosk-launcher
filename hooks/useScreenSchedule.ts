@@ -24,7 +24,7 @@
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { lockScreen, wakeScreen } from "@/modules/ScreenControl";
+import { lockScreen, setKeepScreenOn, wakeScreen } from "@/modules/ScreenControl";
 
 const STORAGE_KEY = "kiosk:screen_schedule";
 const LAST_REFRESH_KEY = "kiosk:last_refresh";
@@ -191,6 +191,9 @@ export function useScreenSchedule({ onRefresh }: Options = {}) {
   const applyScreenState = useCallback(async (sched: ScreenSchedule) => {
     const on = shouldBeOn(sched);
     setScreenOn(on);
+    // Always sync FLAG_KEEP_SCREEN_ON so the hook is self-sufficient on initial
+    // evaluation (addFlags / clearFlags are idempotent; no cost to repeat calls).
+    await setKeepScreenOn(on).catch(() => {});
     if (on !== prevScreenOn.current) {
       prevScreenOn.current = on;
       if (on) {
