@@ -21,7 +21,7 @@ const fs = require("fs");
 const BLUETOOTH_STATUS_MODULE_KT = (packageName) => `\
 package ${packageName}
 
-import android.bluetooth.BluetoothAdapter
+import android.annotation.SuppressLint
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.content.Context
@@ -36,29 +36,24 @@ class BluetoothStatusModule(reactContext: ReactApplicationContext) :
 
     override fun getName(): String = "BluetoothStatusModule"
 
+    @SuppressLint("MissingPermission")
     @ReactMethod
     fun getBluetoothStatus(promise: Promise) {
         try {
             val ctx: Context = reactApplicationContext
             val manager = ctx.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
-            val adapter: BluetoothAdapter? = manager?.adapter
+            val adapter = manager?.adapter
 
             val enabled = adapter?.isEnabled == true
             var connectedDevice: String? = null
 
-            if (enabled && adapter != null) {
+            if (enabled && manager != null) {
                 try {
-                    val connectedDevices = adapter.getProfileConnectionState(BluetoothProfile.A2DP)
                     // getConnectedDevices requires BLUETOOTH_CONNECT on API 31+
-                    val devices = adapter.bondedDevices?.filter { device ->
-                        try {
-                            adapter.getProfileConnectionState(BluetoothProfile.A2DP) ==
-                                BluetoothProfile.STATE_CONNECTED
-                        } catch (e: SecurityException) { false }
-                    }
-                    connectedDevice = devices?.firstOrNull()?.name
+                    val connected = manager.getConnectedDevices(BluetoothProfile.A2DP)
+                    connectedDevice = connected.firstOrNull()?.name
                 } catch (e: SecurityException) {
-                    // BLUETOOTH_CONNECT not granted — leave connectedDevice null
+                    // BLUETOOTH_CONNECT not granted at runtime — leave connectedDevice null
                 }
             }
 
