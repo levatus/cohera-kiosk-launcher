@@ -7,13 +7,12 @@
  *     — catches SecurityException (missing BLUETOOTH_CONNECT at runtime) and
  *       returns { enabled, connectedDevice: null } rather than crashing.
  *
- * Also adds the BLUETOOTH_CONNECT permission (required on Android 12+).
+ * Note: BLUETOOTH_CONNECT permission is added statically in AndroidManifest.xml.
  */
 
 const {
   withMainApplication,
   withDangerousMod,
-  withAndroidManifest,
 } = require("@expo/config-plugins");
 const path = require("path");
 const fs = require("fs");
@@ -159,25 +158,8 @@ function patchMainApplication(config) {
   });
 }
 
-function addBluetoothPermission(config) {
-  return withAndroidManifest(config, (config) => {
-    const manifest = config.modResults.manifest;
-    const permissions = manifest["uses-permission"] || [];
-    const btPermission = "android.permission.BLUETOOTH_CONNECT";
-    const already = permissions.some(
-      (p) => p.$?.["android:name"] === btPermission
-    );
-    if (!already) {
-      permissions.push({ $: { "android:name": btPermission } });
-      manifest["uses-permission"] = permissions;
-    }
-    return config;
-  });
-}
-
 module.exports = function withBluetoothStatus(config) {
   config = writeKotlinFiles(config);
   config = patchMainApplication(config);
-  config = addBluetoothPermission(config);
   return config;
 };
