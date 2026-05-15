@@ -1,6 +1,7 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import Constants from "expo-constants";
 import { useKeepAwake } from "expo-keep-awake";
+import * as SecureStore from "expo-secure-store";
 import { StatusBar } from "expo-status-bar";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -32,6 +33,8 @@ import { closeApp } from "@/modules/LockTask";
 const EMR_URL =
   process.env.EXPO_PUBLIC_EMR_URL ?? "https://health-record-hub-slinuw.replit.app";
 
+const DEVICE_TOKEN_KEY = "kiosk_device_token";
+
 export default function KioskScreen() {
   useKeepAwake();
 
@@ -41,6 +44,21 @@ export default function KioskScreen() {
 
   const webViewRef = useRef<WebView>(null);
   const [hasError, setHasError] = useState(false);
+
+  // Persistent device token stored in SecureStore so login survives app reinstalls.
+  const [savedDeviceToken, setSavedDeviceToken] = useState<string | null>(null);
+  const [tokenCheckDone, setTokenCheckDone] = useState(false);
+
+  useEffect(() => {
+    SecureStore.getItemAsync(DEVICE_TOKEN_KEY)
+      .then((token) => {
+        setSavedDeviceToken(token);
+        setTokenCheckDone(true);
+      })
+      .catch(() => {
+        setTokenCheckDone(true);
+      });
+  }, []);
 
   const { isLocked, lastError, relockSecondsLeft, lock, unlock } = useKioskLock();
 
@@ -83,9 +101,21 @@ export default function KioskScreen() {
     const data = event.nativeEvent.data;
     // Try JSON-encoded messages first
     try {
-      const msg = JSON.parse(data) as { type?: string };
+      const msg = JSON.parse(data) as { type?: string; token?: string };
       if (msg.type === "kiosk:update_check") {
         checkForUpdates();
+        return;
+      }
+      if (msg.type === "kiosk:save_device_token" && typeof msg.token === "string") {
+        SecureStore.setItemAsync(DEVICE_TOKEN_KEY, msg.token)
+          .then(() => setSavedDeviceToken(msg.token!))
+          .catch(() => {});
+        return;
+      }
+      if (msg.type === "kiosk:device_auth_failed") {
+        SecureStore.deleteItemAsync(DEVICE_TOKEN_KEY)
+          .then(() => setSavedDeviceToken(null))
+          .catch(() => {});
         return;
       }
     } catch {
@@ -264,6 +294,7 @@ export default function KioskScreen() {
       window.__KIOSK_BUILD__ = ${JSON.stringify({ build: versionCode, buildTimestamp })};
       window.__KIOSK_CONNECTION__ = ${JSON.stringify(connectionStatus)};
       window.__KIOSK_BT__ = ${JSON.stringify(bluetoothStatus)};
+      ${savedDeviceToken ? `window.__KIOSK_DEVICE_TOKEN__ = ${JSON.stringify(savedDeviceToken)};` : ""}
       document.addEventListener('contextmenu', function(e) { e.preventDefault(); }, true);
     })();
     true;
@@ -282,6 +313,17 @@ export default function KioskScreen() {
   }, [bluetoothStatus]);
 
   const isUpdating = updateAvailable;
+
+  // Wait for SecureStore check before rendering the WebView so that
+  // __KIOSK_DEVICE_TOKEN__ is properly injected on the first page load.
+  if (!tokenCheckDone) {
+    return (
+      <View style={[styles.container, styles.startupLoading]}>
+        <StatusBar hidden />
+        <ActivityIndicator size="large" color="#4a9eff" />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -481,6 +523,10 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#0a1628",
     position: "relative",
+  },
+  startupLoading: {
+    alignItems: "center",
+    justifyContent: "center",
   },
   webview: {
     flex: 1,
