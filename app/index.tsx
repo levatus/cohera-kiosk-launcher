@@ -79,7 +79,7 @@ export default function KioskScreen() {
     webViewRef.current?.reload();
   }, []);
 
-  const { schedule, screenOn, saveSchedule } = useScreenSchedule({
+  const { schedule, screenOn, saveSchedule, wakeNow } = useScreenSchedule({
     onRefresh: handleScheduledRefresh,
   });
 
@@ -400,7 +400,11 @@ export default function KioskScreen() {
       )}
 
       {!screenOn && (
-        <View style={styles.screenOffOverlay} pointerEvents="box-only" />
+        <Pressable
+          style={styles.screenOffOverlay}
+          onPress={wakeNow}
+          accessible={false}
+        />
       )}
 
       {isUpdating && (
@@ -438,11 +442,12 @@ export default function KioskScreen() {
         </View>
       )}
 
-      {/* Pull-to-refresh: thin invisible strip at very top intercepts downward drags */}
+      {/* Pull-to-refresh: thin invisible strip at very top intercepts downward drags.
+          Disabled while the screen-off overlay is active so taps reach the wake Pressable. */}
       <View
         style={styles.pullZone}
         {...pullPanResponder.panHandlers}
-        pointerEvents="box-only"
+        pointerEvents={screenOn ? "box-only" : "none"}
       />
       {/* Animated pull indicator slides down from top edge */}
       <Animated.View

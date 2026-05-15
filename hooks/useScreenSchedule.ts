@@ -335,5 +335,16 @@ export function useScreenSchedule({ onRefresh }: Options = {}) {
     scheduleTransition();
   }, [applyScreenState, scheduleRefresh, scheduleTransition]);
 
-  return { schedule, screenOn, saveSchedule };
+  /**
+   * Immediately wakes the screen without cancelling the existing schedule timers.
+   * The screen will turn off again at the next scheduled off boundary.
+   */
+  const wakeNow = useCallback(async () => {
+    setScreenOn(true);
+    prevScreenOn.current = true;
+    await setKeepScreenOn(true).catch(() => {});
+    await wakeScreen().catch(() => {});
+  }, []);
+
+  return { schedule, screenOn, saveSchedule, wakeNow };
 }
