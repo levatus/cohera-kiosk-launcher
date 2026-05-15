@@ -4,7 +4,13 @@
  * On mount (with a 3-second delay so the WebView can start loading),
  * checks the latest GitHub Release for a newer APK build number.
  * If a newer build is found it immediately begins downloading it
- * and then hands it to Android's native package installer.
+ * and then installs it.
+ *
+ * Install path (tried in order):
+ *  1. SilentInstaller.installApk() — Device Owner PackageInstaller session;
+ *     no Android dialog appears. Only works when the app is set as Device Owner.
+ *  2. expo-intent-launcher fallback — fires the standard ACTION_VIEW intent,
+ *     which shows Android's "Install" dialog. Used when not device owner.
  *
  * Release tag format: "build-N"  (e.g. "build-41")
  * Current build number comes from Constants.expoConfig?.android?.versionCode,
@@ -16,7 +22,7 @@
  *  checking    → fetching releases API
  *  no-update   → remote build ≤ local build; nothing to do
  *  downloading → newer build found; APK download in progress
- *  installing  → download complete; install intent fired
+ *  installing  → download complete; install triggered
  *  error       → any failure (network, parse, download, intent)
  */
 
@@ -25,6 +31,7 @@ import * as FileSystem from "expo-file-system/legacy";
 import * as IntentLauncher from "expo-intent-launcher";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Platform } from "react-native";
+import { installApk } from "@/modules/SilentInstaller";
 
 const GITHUB_REPO = "levatus/cohera-kiosk-launcher";
 const RELEASES_URL = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
@@ -61,8 +68,10 @@ export interface AppUpdateState {
    * already in progress.
    */
   checkForUpdates: () => void;
-  /** True while a manual or automatic release check is in flight. */
+  /** True while a GitHub release check is in flight. */
   checking: boolean;
+  /** True when the install was performed silently (Device Owner path). */
+  silentInstall: boolean;
 }
 
 export function useAppUpdate(): AppUpdateState {
@@ -70,6 +79,7 @@ export function useAppUpdate(): AppUpdateState {
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [latestBuildCreatedAt, setLatestBuildCreatedAt] = useState<string | null>(null);
+  const [silentInstall, setSilentInstall] = useState(false);
 
   const mountedRef = useRef(true);
   const apkUrlRef = useRef<string | null>(null);
@@ -113,6 +123,22 @@ export function useAppUpdate(): AppUpdateState {
 
       if (!mountedRef.current) return;
       setPhase("installing");
+
+      // Attempt silent install via Device Owner PackageInstaller first.
+      try {
+        await installApk(result.uri);
+        if (mountedRef.current) setSilentInstall(true);
+        // Silent install committed successfully — the system will handle the
+        // actual APK installation and app restart; nothing more to do here.
+        return;
+      } catch (silentErr) {
+        const code = (silentErr as { code?: string }).code;
+        if (code !== "NOT_DEVICE_OWNER") {
+          // Unexpected error from silent installer — still fall through to intent.
+          // Log it but don't surface to the user.
+        }
+        // Fall back to intent launcher.
+      }
 
       const contentUri = await FileSystem.getContentUriAsync(result.uri);
 
@@ -219,5 +245,6 @@ export function useAppUpdate(): AppUpdateState {
     },
     checkForUpdates,
     checking: phase === "checking",
+    silentInstall,
   };
 }

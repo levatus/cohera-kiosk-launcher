@@ -21,6 +21,8 @@ import { AdminMenu } from "@/components/AdminMenu";
 import { PinModal } from "@/components/PinModal";
 import { ScheduleModal } from "@/components/ScheduleModal";
 import { useAppUpdate } from "@/hooks/useAppUpdate";
+import { useAutoUpdate } from "@/hooks/useAutoUpdate";
+import { useBluetooth } from "@/hooks/useBluetooth";
 import { useConnectionStatus } from "@/hooks/useConnectionStatus";
 import { useKioskLock } from "@/hooks/useKioskLock";
 import { setKeepScreenOn } from "@/modules/ScreenControl";
@@ -63,8 +65,13 @@ export default function KioskScreen() {
     onRefresh: handleScheduledRefresh,
   });
 
-  const { updateAvailable, downloading, progress, phase, checkForUpdates, checking } = useAppUpdate();
+  const { updateAvailable, downloading, progress, phase, checkForUpdates, checking, silentInstall } = useAppUpdate();
   const [upToDate, setUpToDate] = useState(false);
+
+  // ─── Auto-update daily scheduler ────────────────────────────────────────
+
+  const { settings: autoUpdateSettings, saveSettings: saveAutoUpdateSettings } =
+    useAutoUpdate({ onCheck: checkForUpdates });
 
   const [isAutoReloading, setIsAutoReloading] = useState(false);
 
@@ -73,11 +80,22 @@ export default function KioskScreen() {
   const flushResolverRef = useRef<(() => void) | null>(null);
 
   const handleWebViewMessage = useCallback((event: { nativeEvent: { data: string } }) => {
-    if (event.nativeEvent.data === "kiosk:flush_done") {
+    const data = event.nativeEvent.data;
+    // Try JSON-encoded messages first
+    try {
+      const msg = JSON.parse(data) as { type?: string };
+      if (msg.type === "kiosk:update_check") {
+        checkForUpdates();
+        return;
+      }
+    } catch {
+      // not JSON — fall through to raw string checks
+    }
+    if (data === "kiosk:flush_done") {
       flushResolverRef.current?.();
       flushResolverRef.current = null;
     }
-  }, []);
+  }, [checkForUpdates]);
 
   const handleAutoReload = useCallback(async (failures: number) => {
     console.warn(`[kiosk] auto-reload triggered after ${failures} consecutive ping failures at ${new Date().toISOString()}`);
@@ -122,6 +140,7 @@ export default function KioskScreen() {
   }, []);
 
   const connectionStatus = useConnectionStatus(EMR_URL, { onAutoReload: handleAutoReload });
+  const bluetoothStatus = useBluetooth();
 
   // Pull-to-refresh: drag down from the top edge to hard-reload the WebView.
   const PULL_THRESHOLD = 90;
@@ -244,6 +263,7 @@ export default function KioskScreen() {
       window.__KIOSK_MODE__ = true;
       window.__KIOSK_BUILD__ = ${JSON.stringify({ build: versionCode, buildTimestamp })};
       window.__KIOSK_CONNECTION__ = ${JSON.stringify(connectionStatus)};
+      window.__KIOSK_BT__ = ${JSON.stringify(bluetoothStatus)};
       document.addEventListener('contextmenu', function(e) { e.preventDefault(); }, true);
     })();
     true;
@@ -254,6 +274,12 @@ export default function KioskScreen() {
       `window.__KIOSK_CONNECTION__ = ${JSON.stringify(connectionStatus)}; true;`
     );
   }, [connectionStatus]);
+
+  useEffect(() => {
+    webViewRef.current?.injectJavaScript(
+      `window.__KIOSK_BT__ = ${JSON.stringify(bluetoothStatus)}; true;`
+    );
+  }, [bluetoothStatus]);
 
   const isUpdating = updateAvailable;
 
@@ -346,7 +372,9 @@ export default function KioskScreen() {
             </Text>
             <Text style={styles.updateSub}>
               {phase === "installing"
-                ? "Follow the on-screen prompt to complete the installation."
+                ? silentInstall
+                  ? "The kiosk will restart automatically once installation completes."
+                  : "Follow the on-screen prompt to complete the installation."
                 : "Please keep the app open. The kiosk will restart automatically."}
             </Text>
             {downloading && (
@@ -434,6 +462,8 @@ export default function KioskScreen() {
         onDismiss={() => setShowMenu(false)}
         checking={checking}
         upToDate={upToDate}
+        autoUpdateSettings={autoUpdateSettings}
+        onAutoUpdateSettingsChange={saveAutoUpdateSettings}
       />
 
       <ScheduleModal

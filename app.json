@@ -42,13 +42,15 @@
       "./plugins/withKioskAndroid",
       "./plugins/withDeviceAdmin",
       "./plugins/withLockTask",
-      "./plugins/withScreenControl"
+      "./plugins/withScreenControl",
+      "./plugins/withSilentInstaller",
+      "./plugins/withBluetoothStatus"
     ],
     "experiments": {
       "typedRoutes": true
     },
     "extra": {
-      "buildTimestamp": "2026-05-15T03:49:45.000Z"
+      "buildTimestamp": "2026-05-15T09:00:00.000Z"
     }
   }
 }
