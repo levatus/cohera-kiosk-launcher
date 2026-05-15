@@ -65,7 +65,63 @@ export default function KioskScreen() {
 
   const { updateAvailable, downloading, progress, phase, checkForUpdates, checking } = useAppUpdate();
   const [upToDate, setUpToDate] = useState(false);
-  const connectionStatus = useConnectionStatus(EMR_URL);
+
+  const [isAutoReloading, setIsAutoReloading] = useState(false);
+
+  // Receives the 'kiosk:flush_done' postMessage from the EMR WebView after the
+  // persistent-player has finished patching the current position to the server.
+  const flushResolverRef = useRef<(() => void) | null>(null);
+
+  const handleWebViewMessage = useCallback((event: { nativeEvent: { data: string } }) => {
+    if (event.nativeEvent.data === "kiosk:flush_done") {
+      flushResolverRef.current?.();
+      flushResolverRef.current = null;
+    }
+  }, []);
+
+  const handleAutoReload = useCallback(async (failures: number) => {
+    console.warn(`[kiosk] auto-reload triggered after ${failures} consecutive ping failures at ${new Date().toISOString()}`);
+
+    // Ask the EMR persistent-player to flush the current playback position.
+    // The player's __kiosk_flushPosition__ function PATCHes the active session
+    // and then posts 'kiosk:flush_done' via ReactNativeWebView.postMessage so
+    // we can race it against a 2-second timeout. If the network is frozen the
+    // timeout wins and we still proceed to reload.
+    const flushPromise = new Promise<void>((resolve) => {
+      flushResolverRef.current = resolve;
+    });
+
+    webViewRef.current?.injectJavaScript(`
+      (function() {
+        try {
+          if (typeof window.__kiosk_flushPosition__ === 'function') {
+            window.__kiosk_flushPosition__();
+          } else {
+            window.ReactNativeWebView && window.ReactNativeWebView.postMessage('kiosk:flush_done');
+          }
+        } catch(e) {
+          window.ReactNativeWebView && window.ReactNativeWebView.postMessage('kiosk:flush_done');
+        }
+      })();
+      true;
+    `);
+
+    await Promise.race([
+      flushPromise,
+      new Promise<void>((resolve) => setTimeout(resolve, 2000)),
+    ]);
+
+    // Clean up any dangling resolver so a late postMessage doesn't leak.
+    flushResolverRef.current = null;
+
+    // Show the overlay first, then yield one tick so React commits the render
+    // before the WebView navigation starts.
+    setIsAutoReloading(true);
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    webViewRef.current?.reload();
+  }, []);
+
+  const connectionStatus = useConnectionStatus(EMR_URL, { onAutoReload: handleAutoReload });
 
   // Pull-to-refresh: drag down from the top edge to hard-reload the WebView.
   const PULL_THRESHOLD = 90;
@@ -108,7 +164,10 @@ export default function KioskScreen() {
   ).current;
 
   const handleWebViewError = useCallback(() => setHasError(true), []);
-  const handleWebViewLoad = useCallback(() => setHasError(false), []);
+  const handleWebViewLoad = useCallback(() => {
+    setHasError(false);
+    setIsAutoReloading(false);
+  }, []);
   const handleRetry = useCallback(() => {
     setHasError(false);
     webViewRef.current?.reload();
@@ -184,10 +243,17 @@ export default function KioskScreen() {
     (function() {
       window.__KIOSK_MODE__ = true;
       window.__KIOSK_BUILD__ = ${JSON.stringify({ build: versionCode, buildTimestamp })};
+      window.__KIOSK_CONNECTION__ = ${JSON.stringify(connectionStatus)};
       document.addEventListener('contextmenu', function(e) { e.preventDefault(); }, true);
     })();
     true;
   `;
+
+  useEffect(() => {
+    webViewRef.current?.injectJavaScript(
+      `window.__KIOSK_CONNECTION__ = ${JSON.stringify(connectionStatus)}; true;`
+    );
+  }, [connectionStatus]);
 
   const isUpdating = updateAvailable;
 
@@ -228,6 +294,7 @@ export default function KioskScreen() {
           geolocationEnabled={false}
           androidLayerType="hardware"
           onLoad={handleWebViewLoad}
+          onMessage={handleWebViewMessage}
           onError={handleWebViewError}
           onHttpError={handleWebViewError}
           onPermissionRequest={(request) => {
@@ -254,6 +321,13 @@ export default function KioskScreen() {
           <Pressable style={styles.retryButton} onPress={handleRetry}>
             <Text style={styles.retryText}>Try Again</Text>
           </Pressable>
+        </View>
+      )}
+
+      {isAutoReloading && (
+        <View style={styles.reconnectingOverlay}>
+          <ActivityIndicator size="large" color="#4a9eff" />
+          <Text style={styles.reconnectingText}>Reconnecting…</Text>
         </View>
       )}
 
@@ -314,16 +388,6 @@ export default function KioskScreen() {
       {/* Lock button — upper right corner */}
       <View style={styles.lockCorner}>
         <View style={styles.lockButtonRow}>
-          <View
-            style={[
-              styles.connectionDot,
-              connectionStatus === "online"
-                ? styles.connectionDotOnline
-                : connectionStatus === "degraded"
-                ? styles.connectionDotDegraded
-                : styles.connectionDotOffline,
-            ]}
-          />
           <Pressable
             style={styles.refreshButton}
             onPress={triggerRefresh}
@@ -434,6 +498,20 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600" as const,
   },
+  reconnectingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(10,22,40,0.92)",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 16,
+    zIndex: 8,
+  },
+  reconnectingText: {
+    color: "rgba(255,255,255,0.85)",
+    fontSize: 18,
+    fontWeight: "600" as const,
+    letterSpacing: 0.5,
+  },
   screenOffOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "#000",
@@ -507,22 +585,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-  },
-  connectionDot: {
-    width: 11,
-    height: 11,
-    borderRadius: 6,
-    borderWidth: 1.5,
-    borderColor: "rgba(0,0,0,0.25)",
-  },
-  connectionDotOnline: {
-    backgroundColor: "#4ade80",
-  },
-  connectionDotDegraded: {
-    backgroundColor: "#fbbf24",
-  },
-  connectionDotOffline: {
-    backgroundColor: "#f87171",
   },
   refreshButton: {
     width: 72,
