@@ -1,25 +1,29 @@
 /**
- * Config plugin that writes a SilentInstallerModule native Android module.
+ * Config plugin: SilentInstallerModule + BluetoothStatusModule
  *
- * The module exposes one method to JS:
+ * SilentInstallerModule exposes:
  *   installApk(filePath: string): Promise<void>
- *     — opens a PackageInstaller session as Device Owner and commits the APK
- *       completely silently (no Android install dialog).
- *     — rejects with code "NOT_DEVICE_OWNER" when the app is not the device
- *       owner so the caller can fall back to the intent-launcher path.
+ *     — opens a PackageInstaller session as Device Owner for silent APK install.
+ *     — rejects with "NOT_DEVICE_OWNER" when app is not device owner.
  *
- * The file path must be a local path or file:// URI pointing to the APK.
+ * BluetoothStatusModule exposes:
+ *   getBluetoothStatus(): Promise<{ enabled: boolean; connectedDevice: string | null }>
+ *     — queries BluetoothManager for the first A2DP-connected device.
+ *     — catches SecurityException and returns { enabled, connectedDevice: null }.
+ *
+ * Also adds BLUETOOTH_CONNECT permission to AndroidManifest.xml (Android 12+).
  */
 
-const {
-  withMainApplication,
-  withDangerousMod,
-} = require("@expo/config-plugins");
+const { withMainApplication, withDangerousMod } = require("@expo/config-plugins");
 const path = require("path");
 const fs = require("fs");
 
-const SILENT_INSTALLER_MODULE_KT = (packageName) => `\
-package ${packageName}
+// ---------------------------------------------------------------------------
+// Kotlin source templates
+// ---------------------------------------------------------------------------
+
+const SILENT_INSTALLER_MODULE_KT = (pkg) => `\
+package ${pkg}
 
 import android.app.PendingIntent
 import android.app.admin.DevicePolicyManager
@@ -41,51 +45,36 @@ class SilentInstallerModule(reactContext: ReactApplicationContext) :
     @ReactMethod
     fun installApk(filePath: String, promise: Promise) {
         val context = reactApplicationContext
-
-        // Require Device Owner so the install is truly silent.
         val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
         if (!dpm.isDeviceOwnerApp(context.packageName)) {
             promise.reject("NOT_DEVICE_OWNER", "App is not device owner; cannot install silently")
             return
         }
-
         try {
-            // Strip a leading file:// scheme if present (expo-file-system returns file:// URIs).
             val normalized = filePath.removePrefix("file://")
             val file = File(normalized)
             if (!file.exists()) {
                 promise.reject("FILE_NOT_FOUND", "APK file not found: $normalized")
                 return
             }
-
             val packageInstaller = context.packageManager.packageInstaller
-            val params = PackageInstaller.SessionParams(
-                PackageInstaller.SessionParams.MODE_FULL_INSTALL
-            )
-
+            val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
             val sessionId = packageInstaller.createSession(params)
             val session = packageInstaller.openSession(sessionId)
-
             file.inputStream().use { input ->
                 session.openWrite("package", 0, file.length()).use { output ->
                     input.copyTo(output)
                     session.fsync(output)
                 }
             }
-
-            val intent = Intent("${context.packageName}.SILENT_INSTALL_COMPLETE")
+            val intent = Intent("\${context.packageName}.SILENT_INSTALL_COMPLETE")
                 .setPackage(context.packageName)
-
-            val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
-            } else {
-                PendingIntent.FLAG_UPDATE_CURRENT
-            }
-
+            else PendingIntent.FLAG_UPDATE_CURRENT
             val pendingIntent = PendingIntent.getBroadcast(context, sessionId, intent, flags)
             session.commit(pendingIntent.intentSender)
             session.close()
-
             promise.resolve(null)
         } catch (e: SecurityException) {
             promise.reject("NOT_DEVICE_OWNER", e.message, e)
@@ -96,8 +85,8 @@ class SilentInstallerModule(reactContext: ReactApplicationContext) :
 }
 `;
 
-const SILENT_INSTALLER_PACKAGE_KT = (packageName) => `\
-package ${packageName}
+const SILENT_INSTALLER_PACKAGE_KT = (pkg) => `\
+package ${pkg}
 
 import com.facebook.react.ReactPackage
 import com.facebook.react.bridge.NativeModule
@@ -105,80 +94,160 @@ import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.uimanager.ViewManager
 
 class SilentInstallerPackage : ReactPackage {
-    override fun createNativeModules(
-        reactContext: ReactApplicationContext
-    ): List<NativeModule> = listOf(SilentInstallerModule(reactContext))
-
-    override fun createViewManagers(
-        reactContext: ReactApplicationContext
-    ): List<ViewManager<*, *>> = emptyList()
+    override fun createNativeModules(reactContext: ReactApplicationContext): List<NativeModule> =
+        listOf(SilentInstallerModule(reactContext))
+    override fun createViewManagers(reactContext: ReactApplicationContext): List<ViewManager<*, *>> =
+        emptyList()
 }
 `;
 
-function writeKotlinFiles(config) {
+const BLUETOOTH_STATUS_MODULE_KT = (pkg) => `\
+package ${pkg}
+
+import android.annotation.SuppressLint
+import android.bluetooth.BluetoothManager
+import android.bluetooth.BluetoothProfile
+import android.content.Context
+import com.facebook.react.bridge.Arguments
+import com.facebook.react.bridge.Promise
+import com.facebook.react.bridge.ReactApplicationContext
+import com.facebook.react.bridge.ReactContextBaseJavaModule
+import com.facebook.react.bridge.ReactMethod
+
+class BluetoothStatusModule(reactContext: ReactApplicationContext) :
+    ReactContextBaseJavaModule(reactContext) {
+
+    override fun getName(): String = "BluetoothStatusModule"
+
+    @SuppressLint("MissingPermission")
+    @ReactMethod
+    fun getBluetoothStatus(promise: Promise) {
+        try {
+            val manager = reactApplicationContext
+                .getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
+            val enabled = manager?.adapter?.isEnabled == true
+            var connectedDevice: String? = null
+            if (enabled && manager != null) {
+                try {
+                    connectedDevice = manager
+                        .getConnectedDevices(BluetoothProfile.A2DP)
+                        .firstOrNull()?.name
+                } catch (e: SecurityException) {
+                    // BLUETOOTH_CONNECT not granted at runtime
+                }
+            }
+            val map = Arguments.createMap()
+            map.putBoolean("enabled", enabled)
+            if (connectedDevice != null) map.putString("connectedDevice", connectedDevice)
+            else map.putNull("connectedDevice")
+            promise.resolve(map)
+        } catch (e: Exception) {
+            promise.reject("BT_ERROR", e.message, e)
+        }
+    }
+}
+`;
+
+const BLUETOOTH_STATUS_PACKAGE_KT = (pkg) => `\
+package ${pkg}
+
+import com.facebook.react.ReactPackage
+import com.facebook.react.bridge.NativeModule
+import com.facebook.react.bridge.ReactApplicationContext
+import com.facebook.react.uimanager.ViewManager
+
+class BluetoothStatusPackage : ReactPackage {
+    override fun createNativeModules(reactContext: ReactApplicationContext): List<NativeModule> =
+        listOf(BluetoothStatusModule(reactContext))
+    override fun createViewManagers(reactContext: ReactApplicationContext): List<ViewManager<*, *>> =
+        emptyList()
+}
+`;
+
+// ---------------------------------------------------------------------------
+// Single withDangerousMod: writes all 4 .kt files + patches AndroidManifest
+// ---------------------------------------------------------------------------
+
+function writeNativeFiles(config) {
   return withDangerousMod(config, [
     "android",
     async (config) => {
-      const packageName =
-        config.android?.package ?? "com.clinic.kioskbrowser";
-      const packagePath = packageName.replace(/\./g, "/");
+      const pkg = config.android?.package ?? "com.clinic.kioskbrowser";
       const javaDir = path.join(
         config.modRequest.platformProjectRoot,
         "app/src/main/java",
-        packagePath
+        pkg.replace(/\./g, "/")
       );
-
       fs.mkdirSync(javaDir, { recursive: true });
-      fs.writeFileSync(
-        path.join(javaDir, "SilentInstallerModule.kt"),
-        SILENT_INSTALLER_MODULE_KT(packageName)
+
+      fs.writeFileSync(path.join(javaDir, "SilentInstallerModule.kt"), SILENT_INSTALLER_MODULE_KT(pkg));
+      fs.writeFileSync(path.join(javaDir, "SilentInstallerPackage.kt"), SILENT_INSTALLER_PACKAGE_KT(pkg));
+      fs.writeFileSync(path.join(javaDir, "BluetoothStatusModule.kt"), BLUETOOTH_STATUS_MODULE_KT(pkg));
+      fs.writeFileSync(path.join(javaDir, "BluetoothStatusPackage.kt"), BLUETOOTH_STATUS_PACKAGE_KT(pkg));
+
+      // Add BLUETOOTH_CONNECT permission to AndroidManifest.xml if not already present
+      const manifestPath = path.join(
+        config.modRequest.platformProjectRoot,
+        "app/src/main/AndroidManifest.xml"
       );
-      fs.writeFileSync(
-        path.join(javaDir, "SilentInstallerPackage.kt"),
-        SILENT_INSTALLER_PACKAGE_KT(packageName)
-      );
+      if (fs.existsSync(manifestPath)) {
+        let manifest = fs.readFileSync(manifestPath, "utf8");
+        const permission = "android.permission.BLUETOOTH_CONNECT";
+        if (!manifest.includes(permission)) {
+          manifest = manifest.replace(
+            /(<manifest[^>]*>)/,
+            `$1\n\n  <uses-permission android:name="${permission}"/>`
+          );
+          fs.writeFileSync(manifestPath, manifest, "utf8");
+        }
+      }
 
       return config;
     },
   ]);
 }
 
+// ---------------------------------------------------------------------------
+// Single withMainApplication: registers both packages in one pass
+// ---------------------------------------------------------------------------
+
 function patchMainApplication(config) {
   return withMainApplication(config, (config) => {
     let contents = config.modResults.contents;
-    const packageName =
-      config.android?.package ?? "com.clinic.kioskbrowser";
+    const pkg = config.android?.package ?? "com.clinic.kioskbrowser";
 
-    if (contents.includes("SilentInstallerPackage")) return config;
-
-    // Add import
-    const importLine = `import ${packageName}.SilentInstallerPackage`;
-    if (!contents.includes(importLine)) {
-      if (contents.includes("import com.facebook.react.ReactApplication")) {
+    // --- SilentInstallerPackage ---
+    if (!contents.includes("SilentInstallerPackage")) {
+      const imp = `import ${pkg}.SilentInstallerPackage`;
+      if (!contents.includes(imp)) {
         contents = contents.replace(
           /import com\.facebook\.react\.ReactApplication/,
-          `import com.facebook.react.ReactApplication\n${importLine}`
+          `import com.facebook.react.ReactApplication\n${imp}`
         );
-      } else {
+      }
+      if (contents.includes("PackageList(this).packages.apply")) {
         contents = contents.replace(
-          /^(package .+\n)/,
-          `$1${importLine}\n`
+          /(PackageList\(this\)\.packages\.apply \{)/,
+          `$1\n              add(SilentInstallerPackage())`
         );
       }
     }
 
-    // Expo SDK 52+ / RN 0.76+ format: PackageList(this).packages.apply { ... }
-    if (contents.includes("PackageList(this).packages.apply")) {
-      contents = contents.replace(
-        /(PackageList\(this\)\.packages\.apply \{)/,
-        `$1\n              add(SilentInstallerPackage())`
-      );
-    } else if (contents.includes("PackageList(this).packages")) {
-      // Older format: val packages = PackageList(this).packages
-      contents = contents.replace(
-        /(val packages = PackageList\(this\)\.packages)/,
-        `$1\n      packages.add(SilentInstallerPackage())`
-      );
+    // --- BluetoothStatusPackage ---
+    if (!contents.includes("BluetoothStatusPackage")) {
+      const imp = `import ${pkg}.BluetoothStatusPackage`;
+      if (!contents.includes(imp)) {
+        contents = contents.replace(
+          /import com\.facebook\.react\.ReactApplication/,
+          `import com.facebook.react.ReactApplication\n${imp}`
+        );
+      }
+      if (contents.includes("PackageList(this).packages.apply")) {
+        contents = contents.replace(
+          /(PackageList\(this\)\.packages\.apply \{)/,
+          `$1\n              add(BluetoothStatusPackage())`
+        );
+      }
     }
 
     config.modResults.contents = contents;
@@ -187,7 +256,7 @@ function patchMainApplication(config) {
 }
 
 module.exports = function withSilentInstaller(config) {
-  config = writeKotlinFiles(config);
+  config = writeNativeFiles(config);
   config = patchMainApplication(config);
   return config;
 };

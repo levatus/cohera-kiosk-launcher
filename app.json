@@ -43,14 +43,13 @@
       "./plugins/withDeviceAdmin",
       "./plugins/withLockTask",
       "./plugins/withScreenControl",
-      "./plugins/withSilentInstaller",
-      "./plugins/withBluetoothStatus"
+      "./plugins/withSilentInstaller"
     ],
     "experiments": {
       "typedRoutes": true
     },
     "extra": {
-      "buildTimestamp": "2026-05-15T16:30:00.000Z"
+      "buildTimestamp": "2026-05-15T17:00:00.000Z"
     }
   }
 }
