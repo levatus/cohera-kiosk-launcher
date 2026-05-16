@@ -596,7 +596,7 @@ const styles = StyleSheet.create({
   screenOffOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "#000",
-    zIndex: 10,
+    zIndex: 200,
   },
   updateOverlay: {
     ...StyleSheet.absoluteFillObject,

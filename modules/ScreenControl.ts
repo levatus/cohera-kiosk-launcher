@@ -8,6 +8,9 @@
  * setKeepScreenOn()   — sets/clears FLAG_KEEP_SCREEN_ON on the Activity window
  *                       so Android cannot dim or sleep the display while the app
  *                       is in the foreground.
+ * hideSystemUI()      — enters sticky immersive mode: hides status bar and
+ *                       navigation bar so the screen appears completely black.
+ * showSystemUI()      — restores the status bar and navigation bar.
  *
  * All are no-ops on platforms other than Android.
  */
@@ -39,4 +42,23 @@ export async function lockScreen(): Promise<void> {
 export async function setKeepScreenOn(enabled: boolean): Promise<void> {
   if (Platform.OS !== "android" || !ScreenControlModule) return;
   return ScreenControlModule.setKeepScreenOn(enabled);
+}
+
+/**
+ * Enters sticky immersive mode — hides both the status bar and the Android
+ * navigation bar so the black screen-off overlay is truly fullscreen.
+ * No-op on non-Android platforms.
+ */
+export async function hideSystemUI(): Promise<void> {
+  if (Platform.OS !== "android" || !ScreenControlModule) return;
+  return ScreenControlModule.hideSystemUI();
+}
+
+/**
+ * Restores the status bar and navigation bar after hideSystemUI().
+ * No-op on non-Android platforms.
+ */
+export async function showSystemUI(): Promise<void> {
+  if (Platform.OS !== "android" || !ScreenControlModule) return;
+  return ScreenControlModule.showSystemUI();
 }

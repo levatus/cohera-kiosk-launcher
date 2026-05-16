@@ -29,6 +29,9 @@ import android.app.admin.DevicePolicyManager
 import android.content.Context
 import android.os.Build
 import android.os.PowerManager
+import android.view.View
+import android.view.WindowInsets
+import android.view.WindowInsetsController
 import android.view.WindowManager
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
@@ -105,6 +108,71 @@ class ScreenControlModule(reactContext: ReactApplicationContext) :
             promise.resolve(null)
         } catch (e: Exception) {
             promise.reject("KEEP_SCREEN_ON_FAILED", e.message, e)
+        }
+    }
+
+    /**
+     * Enters sticky immersive mode: hides both the status bar and the
+     * navigation bar so the screen appears completely black when the
+     * schedule turns the display off.
+     */
+    @ReactMethod
+    fun hideSystemUI(promise: Promise) {
+        val activity = reactApplicationContext.currentActivity
+        if (activity == null) {
+            promise.reject("NO_ACTIVITY", "No current Activity")
+            return
+        }
+        try {
+            activity.runOnUiThread {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    val ctrl = activity.window.insetsController
+                    ctrl?.hide(WindowInsets.Type.systemBars())
+                    ctrl?.systemBarsBehavior =
+                        WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                } else {
+                    @Suppress("DEPRECATION")
+                    activity.window.decorView.systemUiVisibility = (
+                        View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                        or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                        or View.SYSTEM_UI_FLAG_FULLSCREEN
+                        or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                        or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                        or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                    )
+                }
+            }
+            promise.resolve(null)
+        } catch (e: Exception) {
+            promise.reject("HIDE_UI_FAILED", e.message, e)
+        }
+    }
+
+    /**
+     * Restores the status bar and navigation bar after a hideSystemUI() call.
+     */
+    @ReactMethod
+    fun showSystemUI(promise: Promise) {
+        val activity = reactApplicationContext.currentActivity
+        if (activity == null) {
+            promise.reject("NO_ACTIVITY", "No current Activity")
+            return
+        }
+        try {
+            activity.runOnUiThread {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    activity.window.insetsController?.show(WindowInsets.Type.systemBars())
+                } else {
+                    @Suppress("DEPRECATION")
+                    activity.window.decorView.systemUiVisibility = (
+                        View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                        or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                    )
+                }
+            }
+            promise.resolve(null)
+        } catch (e: Exception) {
+            promise.reject("SHOW_UI_FAILED", e.message, e)
         }
     }
 }

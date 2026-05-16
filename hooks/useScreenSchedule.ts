@@ -24,7 +24,7 @@
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { lockScreen, setKeepScreenOn, wakeScreen } from "@/modules/ScreenControl";
+import { hideSystemUI, lockScreen, setKeepScreenOn, showSystemUI, wakeScreen } from "@/modules/ScreenControl";
 
 const STORAGE_KEY = "kiosk:screen_schedule";
 const LAST_REFRESH_KEY = "kiosk:last_refresh";
@@ -198,10 +198,12 @@ export function useScreenSchedule({ onRefresh }: Options = {}) {
       prevScreenOn.current = on;
       if (on) {
         await wakeScreen().catch(() => {});
+        await showSystemUI().catch(() => {});
       } else {
         await lockScreen().catch(() => {
           // lockScreen() rejected (not device admin) — JS overlay handles it
         });
+        await hideSystemUI().catch(() => {});
       }
     }
   }, []);
@@ -344,6 +346,7 @@ export function useScreenSchedule({ onRefresh }: Options = {}) {
     prevScreenOn.current = true;
     await setKeepScreenOn(true).catch(() => {});
     await wakeScreen().catch(() => {});
+    await showSystemUI().catch(() => {});
   }, []);
 
   return { schedule, screenOn, saveSchedule, wakeNow };
